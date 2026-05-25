@@ -9,7 +9,6 @@ interface TopNavBarProps {
   onSelectRepo: (path: string) => void;
   onAddRepo: (name: string, path: string, org: string, user: string, group: string) => void;
   onRemoveRepo: (path: string) => void;
-  onCreateRepo: () => void;
   currentBranch: string;
   branches: string[];
   onSwitchBranch: (branch: string) => void;
@@ -22,7 +21,6 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
   onSelectRepo,
   onAddRepo,
   onRemoveRepo,
-  onCreateRepo,
   currentBranch,
   branches,
   onSwitchBranch,
@@ -156,11 +154,10 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
           display: "flex", 
           alignItems: "center", 
           padding: "0 16px",
-          borderRight: "1px solid rgba(0, 0, 0, 0.05)",
           cursor: "pointer",
           WebkitAppRegion: "no-drag",
           position: "relative"
-        }}
+        } as any}
         className="hover-bg"
         onClick={() => setRepoMenuOpen(!repoMenuOpen)}
       >
@@ -214,11 +211,10 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
           display: "flex", 
           alignItems: "center", 
           padding: "0 16px",
-          borderRight: "1px solid rgba(0, 0, 0, 0.05)",
           cursor: "pointer",
           WebkitAppRegion: "no-drag",
           position: "relative"
-        }}
+        } as any}
         className="hover-bg"
         onClick={() => setBranchMenuOpen(!branchMenuOpen)}
       >

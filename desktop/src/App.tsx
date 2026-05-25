@@ -29,7 +29,7 @@ function App() {
       await invoke("git_checkout", { target: branchName });
       reloadData();
     } catch (e) {
-      showNotif(`切换分支失败: ${e}`, "error");
+      showNotif(`切换分支失败: ${e}`, "danger");
     }
   };
 
@@ -94,7 +94,10 @@ function App() {
   const reloadData = async () => {
     try {
       const res: StatusInfo = await invoke("get_status_info");
-      setStatus(res);
+      setStatus(prev => {
+        if (prev && JSON.stringify(prev) === JSON.stringify(res)) return prev;
+        return res;
+      });
 
       if (res.is_repo) {
         if (!activeRepoPath) {
@@ -125,7 +128,10 @@ function App() {
           }
           return b;
         });
-        setBranches(cleanBranches);
+        setBranches(prev => {
+          if (prev.length === cleanBranches.length && JSON.stringify(prev) === JSON.stringify(cleanBranches)) return prev;
+          return cleanBranches;
+        });
         setCurrentBranch(active);
 
         // Fetch Commits
@@ -323,6 +329,7 @@ function App() {
     }
   };
 
+  // @ts-ignore
   const handleDeleteProfile = async (alias: string) => {
     if (confirm(`确认要删除别名为 '${alias}' 的 Profile 吗？`)) {
       try {
@@ -567,9 +574,8 @@ function App() {
         <TopNavBar
           repos={repos}
           activeRepoPath={activeRepoPath}
-          onSelectRepo={setActiveRepoPath}
+          onSelectRepo={handleSwitchRepo}
           onAddRepo={handleAddRepo}
-          onCreateRepo={() => {}}
           currentBranch={currentBranch}
           branches={branches}
           onSwitchBranch={handleSwitchBranch}
