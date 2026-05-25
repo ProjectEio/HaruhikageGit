@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 // --- Components & Types ---
 import { StatusInfo, GitFileStatus, CommitInfo, DeviceCode, ProxySettings, Notification } from "./types";
@@ -11,6 +12,8 @@ import { HistoryPanel } from "./components/HistoryPanel";
 import { AddProfileModal, GithubLoginModal, ProxyModal } from "./components/Modals";
 
 function App() {
+  const appWindow = getCurrentWindow();
+
   // --- States ---
   const [status, setStatus] = useState<StatusInfo | null>(null);
   const [gitStatus, setGitStatus] = useState<GitFileStatus[]>([]);
@@ -386,22 +389,44 @@ function App() {
     showNotif("提交 Hash 已复制到剪贴板 📋", "success");
   };
 
+  const handleMinimize = async () => {
+    try {
+      await appWindow.minimize();
+    } catch (err) {
+      console.error("最小化窗口失败:", err);
+    }
+  };
+
+  const handleClose = async () => {
+    try {
+      await appWindow.close();
+    } catch (err) {
+      console.error("关闭窗口失败:", err);
+    }
+  };
+
   return (
     <div className="app-container">
       {/* Top Titlebar */}
-      <header className="app-header">
-        <div className="brand">
-          <span className="logo">🌸</span>
-          <span className="title">HaruhikageGit</span>
-          <span className="version">v0.1.0</span>
+      <header className="app-header" data-tauri-drag-region>
+        <div className="brand" data-tauri-drag-region>
+          <span className="logo" data-tauri-drag-region>🌸</span>
+          <span className="title" data-tauri-drag-region>HaruhikageGit</span>
+          <span className="version" data-tauri-drag-region>v0.1.0</span>
         </div>
-        <div className="repo-badge">
-          <span className={`indicator ${status?.is_repo ? "green" : "red"}`}></span>
-          <span className="text">{status?.is_repo ? "已连接 Git 仓库" : "未检测到 Git 仓库"}</span>
+        <div className="repo-badge" data-tauri-drag-region>
+          <span className={`indicator ${status?.is_repo ? "green" : "red"}`} data-tauri-drag-region></span>
+          <span className="text" data-tauri-drag-region>{status?.is_repo ? "已连接 Git 仓库" : "未检测到 Git 仓库"}</span>
         </div>
         <div className="header-actions">
           <button className="icon-btn" onClick={handleOpenProxy} title="代理设置">
             🌐 代理
+          </button>
+          <button className="icon-btn win-ctrl-btn" onClick={handleMinimize} title="最小化" style={{ minWidth: "32px", padding: "6px 0", justifyContent: "center" }}>
+            ➖
+          </button>
+          <button className="icon-btn win-ctrl-btn close-btn-win" onClick={handleClose} title="关闭" style={{ minWidth: "32px", padding: "6px 0", justifyContent: "center" }}>
+            ❌
           </button>
         </div>
       </header>

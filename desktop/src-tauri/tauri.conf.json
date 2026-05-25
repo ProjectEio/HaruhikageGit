@@ -14,7 +14,9 @@
       {
         "title": "HaruhikageGit Desktop",
         "width": 1120,
-        "height": 720
+        "height": 720,
+        "decorations": false,
+        "transparent": true
       }
     ],
     "security": {

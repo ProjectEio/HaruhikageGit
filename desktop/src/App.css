@@ -43,7 +43,7 @@
 
 body {
   font-family: var(--font-sans);
-  background-color: var(--bg-app);
+  background-color: transparent; /* Make body background transparent */
   color: var(--text-primary);
   height: 100vh;
   overflow: hidden;
@@ -57,6 +57,12 @@ body {
   flex-direction: column;
   height: 100vh;
   width: 100vw;
+  background-color: rgba(8, 10, 17, 0.72); /* Glass background */
+  backdrop-filter: blur(28px) saturate(125%); /* Elegant blur */
+  border: 1px solid rgba(255, 255, 255, 0.08); /* Window borders */
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   background-image: 
     radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.08) 0px, transparent 50%),
     radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
@@ -1111,4 +1117,20 @@ body {
 
 .proxy-effective-status strong {
   color: var(--color-success);
+}
+
+/* Custom Window Controls Styling */
+.win-ctrl-btn {
+  transition: all var(--transition-fast) !important;
+}
+
+.win-ctrl-btn:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+.close-btn-win:hover {
+  background: rgba(239, 68, 68, 0.85) !important;
+  color: #fff !important;
+  border-color: rgba(239, 68, 68, 0.85) !important;
 }
