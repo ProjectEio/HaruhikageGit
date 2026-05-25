@@ -131,7 +131,7 @@ impl Client {
                 Some("authorization_pending") => {}
                 Some("slow_down") => wait = poll.interval.unwrap_or(wait + 5),
                 Some("expired_token") => {
-                    bail!("验证码已过期，请重新运行 `gf github login`")
+                    bail!("验证码已过期，请重新运行 `hg github login`")
                 }
                 Some("access_denied") => bail!("授权被取消"),
                 Some(e) => bail!("授权错误: {}", e),

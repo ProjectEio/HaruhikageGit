@@ -6,10 +6,10 @@ use crate::core::{github::DeviceCode, ops};
 
 // ── clap 结构定义 ────────────────────────────────────────────────────────────
 
-/// git-fast (gf) — 快速切换 git 账户与提交信息
+/// HaruhikageGit (hg) — 快速切换 git 账户与提交信息
 #[derive(Parser)]
 #[command(
-    name = "gf",
+    name = "hg",
     version,
     about = "快速切换 git 账户与提交信息",
     long_about = None
@@ -41,7 +41,7 @@ enum Commands {
     #[command(subcommand)]
     Github(GithubCommands),
 
-    /// 安装 gf 到本地目录并注册 PATH
+    /// 安装 hg 到本地目录并注册 PATH
     Install {
         /// 安装目标目录（默认 ~/.haruhikage-git/bin/）
         #[arg(short, long)]
@@ -234,7 +234,7 @@ pub fn run() -> Result<()> {
 fn cmd_status() -> Result<()> {
     let info = ops::get_status()?;
 
-    println!("{}", "=== git-fast 状态 ===".bold());
+    println!("{}", "=== HaruhikageGit 状态 ===".bold());
     println!(
         "  {} {}",
         "全局账户:".bold(),
@@ -252,7 +252,7 @@ fn cmd_status() -> Result<()> {
 
     println!();
     if info.profiles.is_empty() {
-        println!("{}", "暂无已保存的 Profile，使用 `gf profile add` 添加".yellow());
+        println!("{}", "暂无已保存的 Profile，使用 `hg profile add` 添加".yellow());
     } else {
         println!("{}", "已保存的 Profiles:".bold());
         for (alias, p) in &info.profiles {
@@ -350,7 +350,7 @@ fn cmd_profile_remove(alias: &str) -> Result<()> {
 fn cmd_profile_list() -> Result<()> {
     let profiles = ops::list_profiles()?;
     if profiles.is_empty() {
-        println!("{}", "暂无 Profile，请使用 `gf profile add` 添加".yellow());
+        println!("{}", "暂无 Profile，请使用 `hg profile add` 添加".yellow());
         return Ok(());
     }
     println!("{}", "已保存的 Profiles:".bold());
@@ -411,7 +411,7 @@ fn cmd_github_login(alias: &str, global: bool) -> Result<()> {
 fn cmd_github_set_client(client_id: &str) -> Result<()> {
     ops::set_github_client(client_id)?;
     println!("{} GitHub OAuth client_id 已保存", "✔".green());
-    println!("  现在可以运行: {}", "gf github login".cyan());
+    println!("  现在可以运行: {}", "hg github login".cyan());
     Ok(())
 }
 
@@ -426,12 +426,12 @@ fn cmd_install(dir: Option<std::path::PathBuf>, add_to_path: bool) -> Result<()>
             "✔".green(),
             r.dir.display().to_string().cyan()
         );
-        println!("  重新打开终端后即可直接使用 {}", "gf".cyan().bold());
+        println!("  重新打开终端后即可直接使用 {}", "hg".cyan().bold());
     } else if add_to_path {
         println!("  {} 已在 PATH 中，无需修改", r.dir.display().to_string().cyan());
     } else {
         println!(
-            "  提示：手动将 {} 添加到 PATH 后即可全局使用 gf",
+            "  提示：手动将 {} 添加到 PATH 后即可全局使用 hg",
             r.dir.display().to_string().cyan()
         );
     }
@@ -513,7 +513,7 @@ fn cmd_github_create(
     println!("  URL:  {}", info.html_url.cyan());
     println!("  已配置本地 remote origin → {}", info.clone_url.cyan());
     println!();
-    println!("现在可以运行：{}", "gf publish".cyan().bold());
+    println!("现在可以运行：{}", "hg publish".cyan().bold());
     Ok(())
 }
 

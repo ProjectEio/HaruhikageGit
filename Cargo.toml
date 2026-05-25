@@ -7,7 +7,7 @@ repository = "https://github.com/ProjectEio/HaruhikageGit"
 license = "MIT"
 
 [[bin]]
-name = "gf"
+name = "hg"
 path = "src/main.rs"
 
 [dependencies]

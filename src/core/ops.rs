@@ -13,7 +13,7 @@ fn gh_client() -> Result<github::Client> {
     Ok(github::Client::new(&cfg.proxy))
 }
 
-/// `gf status` 返回的完整状态快照
+/// `hg status` 返回的完整状态快照
 pub struct StatusInfo {
     pub global_name: Option<String>,
     pub global_email: Option<String>,
@@ -89,7 +89,7 @@ pub fn switch_profile(alias: &str, global: bool) -> Result<Profile> {
     let profile = cfg
         .profiles
         .get(alias)
-        .ok_or_else(|| anyhow::anyhow!("Profile '{}' 不存在，请先用 `gf profile add` 添加", alias))?
+        .ok_or_else(|| anyhow::anyhow!("Profile '{}' 不存在，请先用 `hg profile add` 添加", alias))?
         .clone();
 
     git::set_config("user.name", &profile.name, global)?;
@@ -219,7 +219,7 @@ pub fn github_create_repo(
         .token
         .as_deref()
         .ok_or_else(|| {
-            anyhow::anyhow!("Profile '{}' 没有 token，请先 `gf github login`", profile_alias)
+            anyhow::anyhow!("Profile '{}' 没有 token，请先 `hg github login`", profile_alias)
         })?
         .to_string();
     let client = github::Client::new(&cfg.proxy);
