@@ -46,3 +46,11 @@ export interface Notification {
   message: string;
   type: "success" | "danger" | "info";
 }
+
+export interface ManagedRepository {
+  name: string;
+  path: string;
+  organization: string;
+  user: string;
+  custom_group: string;
+}

@@ -1,5 +1,6 @@
-import React from "react";
-import { GitFileStatus, StatusInfo } from "../types";
+import React, { useState, useEffect } from "react";
+import { GitFileStatus, StatusInfo, CommitInfo } from "../types";
+import { invoke } from "@tauri-apps/api/core";
 
 interface WorkspacePanelProps {
   status: StatusInfo | null;
@@ -12,10 +13,10 @@ interface WorkspacePanelProps {
   setCommitProfile: (val: string) => void;
   onStageFile: (path: string, staged: boolean) => void;
   onStageAll: () => void;
-  onGitFetch: () => void;
-  onGitPull: () => void;
-  onGitPush: () => void;
   onGitCommit: () => void;
+  commits: CommitInfo[];
+  onCopyHash: (hash: string) => void;
+  onUndoAll: () => void; // Triggered when clicking Discard/Undo all changes
 }
 
 export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
@@ -29,41 +30,66 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
   setCommitProfile,
   onStageFile,
   onStageAll,
-  onGitFetch,
-  onGitPull,
-  onGitPush,
   onGitCommit,
+  commits,
+  onCopyHash,
+  onUndoAll,
 }) => {
+  const hasChanges = gitStatus.length > 0;
+  const [activeTab, setActiveTab] = useState<"changes" | "history">("history");
+
+  // Keep active tab as "changes" if changes suddenly appear, or reset to "history" if no changes
+  useEffect(() => {
+    if (hasChanges) {
+      setActiveTab("changes");
+    } else {
+      setActiveTab("history");
+    }
+  }, [hasChanges]);
+
   const hasUnstaged = gitStatus.some((f) => f.status !== "staged");
 
   return (
-    <>
-      {/* Staging Changed Files Panel */}
-      <div className="section-card stage-panel">
-        <div className="section-header">
-          <h3 className="section-title">工作区变更</h3>
-          {gitStatus.length > 0 && hasUnstaged && (
-            <div className="header-btns">
-              <button className="btn btn-sm btn-success" onClick={onStageAll}>
-                暂存所有
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="files-container">
-          <div className="file-list-header">
-            <span>文件名 / 路径</span>
-            <span>状态</span>
-            <span>操作</span>
+    <div className="section-card workspace-panel" style={{ flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>
+      {/* Panel Headers with Tab Selector */}
+      <div className="section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h3 className="section-title">
+          {activeTab === "changes" ? "未提交工作区" : "项目提交历史"}
+        </h3>
+        
+        {/* Tab switchers: Only visible when there are uncommitted changes */}
+        {hasChanges && (
+          <div className="tab-switcher" style={{ display: "flex", background: "rgba(0,0,0,0.2)", borderRadius: "6px", padding: "2px" }}>
+            <button
+              className={`tab-btn ${activeTab === "changes" ? "active" : ""}`}
+              onClick={() => setActiveTab("changes")}
+              style={{ border: "none", background: "transparent", color: activeTab === "changes" ? "#fff" : "var(--text-secondary)", fontSize: "0.75rem", padding: "4px 10px", cursor: "pointer", borderRadius: "4px", fontWeight: "600", transition: "all 0.2s" }}
+            >
+              未提交变更 ({gitStatus.length})
+            </button>
+            <button
+              className={`tab-btn ${activeTab === "history" ? "active" : ""}`}
+              onClick={() => setActiveTab("history")}
+              style={{ border: "none", background: "transparent", color: activeTab === "history" ? "#fff" : "var(--text-secondary)", fontSize: "0.75rem", padding: "4px 10px", cursor: "pointer", borderRadius: "4px", fontWeight: "600", transition: "all 0.2s" }}
+            >
+              提交历史
+            </button>
           </div>
-          <div className="files-list">
-            {!status || !status.is_repo ? (
-              <div className="empty-placeholder">未在 Git 仓库内，暂无工作区变更</div>
-            ) : gitStatus.length === 0 ? (
-              <div className="empty-placeholder">暂无工作区变更，当前工作区很干净</div>
-            ) : (
-              gitStatus.map((f) => {
+        )}
+      </div>
+
+      {/* Tab Contents: Changes Panel */}
+      {activeTab === "changes" && hasChanges && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "14px", animation: "modalIn 0.2s ease" }}>
+          {/* File Staging Table */}
+          <div className="files-container">
+            <div className="file-list-header">
+              <span>文件名 / 路径</span>
+              <span>状态</span>
+              <span>操作</span>
+            </div>
+            <div className="files-list" style={{ maxHeight: "200px" }}>
+              {gitStatus.map((f) => {
                 const isStaged = f.status === "staged";
                 return (
                   <div className="file-item" key={f.path}>
@@ -79,50 +105,59 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
                     </button>
                   </div>
                 );
-              })
+              })}
+            </div>
+          </div>
+
+          {/* Quick Sync & Discard Options */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            {hasUnstaged ? (
+              <button className="btn btn-sm btn-success" onClick={onStageAll}>
+                暂存所有文件
+              </button>
+            ) : (
+              <div style={{ fontSize: "0.8rem", color: "var(--color-success-hover)", fontWeight: "500" }}>
+                ✓ 所有变更已成功暂存
+              </div>
             )}
-          </div>
-        </div>
-      </div>
-
-      {/* Sync and Commit Actions Panel */}
-      {status?.is_repo && (
-        <div className="section-card commit-panel">
-          <h3 className="section-title">快速同步与提交</h3>
-          <div className="sync-actions-row">
-            <button className="btn btn-secondary" onClick={onGitFetch}>
-              Fetch 抓取
-            </button>
-            <button className="btn btn-secondary" onClick={onGitPull}>
-              Pull 拉取
-            </button>
-            <button className="btn btn-primary" onClick={onGitPush}>
-              Push 推送至 Origin
+            
+            <button
+              className="btn btn-sm btn-secondary btn-delete"
+              onClick={onUndoAll}
+              title="放弃当前所有未提交的变动并还原代码 (Git Reset Hard)"
+              style={{
+                background: "rgba(239, 68, 68, 0.1)",
+                color: "var(--color-danger)",
+                borderColor: "rgba(239, 68, 68, 0.3)"
+              }}
+            >
+              放弃所有变更 (Undo)
             </button>
           </div>
 
-          <div className="commit-form">
+          {/* Commit Form */}
+          <div className="commit-form" style={{ marginTop: "6px" }}>
             <div className="form-row">
-              <label htmlFor="commit-msg-textarea">提交信息 (Commit Message):</label>
+              <label htmlFor="commit-msg-textarea">提交说明 (Commit Message):</label>
               <textarea
                 id="commit-msg-textarea"
                 value={commitMsg}
                 onChange={(e) => setCommitMsg(e.target.value)}
-                placeholder="输入提交说明 (例如: feat: 新增 UI 功能)..."
-                rows={3}
+                placeholder="输入本次提交的简要说明..."
+                rows={2}
               />
             </div>
 
             <div className="form-row inline-row">
               <div className="profile-select-wrapper">
-                <label htmlFor="commit-profile-select">提交身份 (可选 Override):</label>
+                <label htmlFor="commit-profile-select">切换提交账户 (可选 Override):</label>
                 <select
                   id="commit-profile-select"
                   value={commitProfile}
                   onChange={(e) => setCommitProfile(e.target.value)}
                 >
-                  <option value="">保持当前仓库身份 (Default)</option>
-                  {status.profiles.map(([alias, p]) => (
+                  <option value="">默认当前仓库身份 (Default)</option>
+                  {status?.profiles.map(([alias, p]) => (
                     <option value={alias} key={alias}>
                       {alias} ({p.name})
                     </option>
@@ -137,19 +172,53 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
                   onChange={(e) => setCommitStageAll(e.target.checked)}
                 />
                 <label htmlFor="stage-all-checkbox" title="相当于 git commit -a">
-                  自动 Stage 所有变更 (-a)
+                  自动暂存所有变更 (-a)
                 </label>
               </div>
             </div>
 
             <div className="form-actions">
-              <button className="btn btn-success btn-large" onClick={onGitCommit}>
+              <button className="btn btn-success btn-large" onClick={onGitCommit} style={{ width: "100%" }}>
                 快速提交 Commit
               </button>
             </div>
           </div>
         </div>
       )}
-    </>
+
+      {/* Tab Contents: History Panel */}
+      {activeTab === "history" && (
+        <div className="timeline" style={{ maxHeight: "380px", overflowY: "auto", paddingLeft: "10px", animation: "modalIn 0.2s ease" }}>
+          {!status || !status.is_repo ? (
+            <div className="empty-placeholder" style={{ padding: "40px" }}>未在 Git 仓库内，暂无历史提交日志</div>
+          ) : commits.length === 0 ? (
+            <div className="empty-placeholder" style={{ padding: "40px" }}>暂无提交记录</div>
+          ) : (
+            commits.map((c) => {
+              const shortHash = c.hash.substring(0, 7);
+              return (
+                <div className="timeline-item" key={c.hash}>
+                  <div className="timeline-header">
+                    <span
+                      className="commit-hash"
+                      onClick={() => onCopyHash(c.hash)}
+                      title="点击复制完整 Hash"
+                      style={{ cursor: "pointer" }}
+                    >
+                      {shortHash}
+                    </span>
+                    <span className="commit-date">{c.date}</span>
+                  </div>
+                  <div className="commit-msg">{c.message}</div>
+                  <div className="commit-meta">
+                    {c.author} &lt;{c.email}&gt;
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
   );
 };

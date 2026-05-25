@@ -122,6 +122,115 @@ fn set_proxy_auto_detect(enabled: bool) -> Result<(), String> {
     ops::set_proxy_auto_detect(enabled).map_err(|e| e.to_string())
 }
 
+use std::path::PathBuf;
+use std::process::Command;
+
+#[tauri::command]
+fn get_managed_repositories() -> Result<Vec<haruhikage_git::core::config::ManagedRepository>, String> {
+    ops::get_managed_repositories().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn add_managed_repository(
+    name: String,
+    path: String,
+    organization: String,
+    user: String,
+    custom_group: String,
+) -> Result<(), String> {
+    let p = PathBuf::from(path);
+    ops::add_managed_repository(&name, p, &organization, &user, &custom_group).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn remove_managed_repository(path: String) -> Result<(), String> {
+    let p = PathBuf::from(path);
+    ops::remove_managed_repository(p).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn switch_active_repository(path: String) -> Result<ops::StatusInfo, String> {
+    let p = std::path::Path::new(&path);
+    if !p.exists() || !p.is_dir() {
+        return Err("目录不存在或不是文件夹".to_string());
+    }
+    std::env::set_current_dir(p).map_err(|e| format!("切换工作目录失败: {}", e))?;
+    ops::get_status().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn open_in_explorer(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let cmd = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+        Command::new(cmd)
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn open_in_vscode(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd")
+            .args(&["/c", "code", "."])
+            .current_dir(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Command::new("code")
+            .arg(".")
+            .current_dir(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn get_remote_url() -> Result<String, String> {
+    let out = Command::new("git")
+        .args(&["remote", "get-url", "origin"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    } else {
+        Err("没有配置远程源 origin".to_string())
+    }
+}
+
+#[tauri::command]
+fn git_discard_changes() -> Result<(), String> {
+    let out1 = Command::new("git")
+        .args(&["reset", "--hard", "HEAD"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out1.status.success() {
+        return Err(String::from_utf8_lossy(&out1.stderr).trim().to_string());
+    }
+    let out2 = Command::new("git")
+        .args(&["clean", "-df"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out2.status.success() {
+        return Err(String::from_utf8_lossy(&out2.stderr).trim().to_string());
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -148,7 +257,15 @@ pub fn run() {
             github_pat_login,
             get_proxy_status,
             set_proxy_url,
-            set_proxy_auto_detect
+            set_proxy_auto_detect,
+            get_managed_repositories,
+            add_managed_repository,
+            remove_managed_repository,
+            switch_active_repository,
+            open_in_explorer,
+            open_in_vscode,
+            get_remote_url,
+            git_discard_changes
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

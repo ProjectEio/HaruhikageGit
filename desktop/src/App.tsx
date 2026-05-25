@@ -3,12 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 // --- Components & Types ---
-import { StatusInfo, GitFileStatus, CommitInfo, DeviceCode, ProxySettings, Notification } from "./types";
+import { StatusInfo, GitFileStatus, CommitInfo, DeviceCode, ProxySettings, Notification, ManagedRepository } from "./types";
 import { IdentityPanel } from "./components/IdentityPanel";
 import { ProfilesPanel } from "./components/ProfilesPanel";
 import { WorkspacePanel } from "./components/WorkspacePanel";
-import { BranchPanel } from "./components/BranchPanel";
-import { HistoryPanel } from "./components/HistoryPanel";
+import { RepoSidebar } from "./components/RepoSidebar";
+import { QuickActionsPanel } from "./components/QuickActionsPanel";
 import { AddProfileModal, GithubLoginModal, ProxyModal } from "./components/Modals";
 
 function App() {
@@ -21,6 +21,10 @@ function App() {
   const [currentBranch, setCurrentBranch] = useState<string>("");
   const [commits, setCommits] = useState<CommitInfo[]>([]);
   
+  // Multi-repository states
+  const [repos, setRepos] = useState<ManagedRepository[]>([]);
+  const [activeRepoPath, setActiveRepoPath] = useState<string | null>(null);
+
   // Proxy States
   const [proxyAuto, setProxyAuto] = useState(true);
   const [proxyUrl, setProxyUrl] = useState("");
@@ -60,6 +64,23 @@ function App() {
     }, 3500);
   };
 
+  // --- Reload Managed Repositories ---
+  const loadRepos = async () => {
+    try {
+      const list: ManagedRepository[] = await invoke("get_managed_repositories");
+      setRepos(list);
+      
+      // Auto-set first repo as active if not yet set and we have repos
+      if (list.length > 0 && !activeRepoPath) {
+        setActiveRepoPath(list[0].path);
+        // Switch working dir in backend
+        await invoke("switch_active_repository", { path: list[0].path });
+      }
+    } catch (err) {
+      console.error("加载托管仓库列表失败:", err);
+    }
+  };
+
   // --- Reload All State Data ---
   const reloadData = async () => {
     try {
@@ -85,8 +106,13 @@ function App() {
         setCurrentBranch(active);
 
         // Fetch Logs
-        const logs: CommitInfo[] = await invoke("get_git_commits", { limit: 10 });
+        const logs: CommitInfo[] = await invoke("get_git_commits", { limit: 15 });
         setCommits(logs);
+      } else {
+        setGitStatus([]);
+        setBranches([]);
+        setCurrentBranch("");
+        setCommits([]);
       }
     } catch (err) {
       console.error("加载数据失败:", err);
@@ -95,15 +121,18 @@ function App() {
 
   // --- Setup Polling Loops ---
   useEffect(() => {
+    loadRepos();
+  }, []);
+
+  useEffect(() => {
     reloadData();
     const interval = setInterval(() => {
-      // Only refresh if no modals are open
       if (!activeModal) {
         reloadData();
       }
-    }, 5000);
+    }, 4500);
     return () => clearInterval(interval);
-  }, [activeModal]);
+  }, [activeModal, activeRepoPath]);
 
   // --- GitHub OAuth Token Polling ---
   useEffect(() => {
@@ -164,6 +193,55 @@ function App() {
   }, [githubDevice, githubAlias]);
 
   // --- Action Functions ---
+
+  const handleSwitchRepo = async (path: string) => {
+    try {
+      showNotif(`正在切换至仓库: ${path}`, "info");
+      await invoke("switch_active_repository", { path });
+      setActiveRepoPath(path);
+      showNotif(`成功切换仓库工作区！`, "success");
+      reloadData();
+    } catch (err) {
+      showNotif("切换仓库失败: " + err, "danger");
+    }
+  };
+
+  const handleAddRepo = async (name: string, path: string, org: string, user: string, group: string) => {
+    try {
+      await invoke("add_managed_repository", { name, path, organization: org, user, customGroup: group });
+      showNotif(`托管仓库 '${name}' 添加成功！`, "success");
+      loadRepos();
+      setActiveRepoPath(path);
+    } catch (err) {
+      showNotif("添加托管仓库失败: " + err, "danger");
+    }
+  };
+
+  const handleRemoveRepo = async (path: string) => {
+    try {
+      await invoke("remove_managed_repository", { path });
+      showNotif(`已成功取消该仓库的托管`, "success");
+      loadRepos();
+      if (activeRepoPath === path) {
+        setActiveRepoPath(null);
+      }
+    } catch (err) {
+      showNotif("删除托管失败: " + err, "danger");
+    }
+  };
+
+  const handleUndoAll = async () => {
+    if (confirm("⚠️ 确定要放弃当前所有未提交的变动吗？此操作会执行 git reset --hard 并清空所有新增文件，且无法撤销！")) {
+      try {
+        showNotif("正在还原工作区代码...", "info");
+        await invoke("git_discard_changes");
+        showNotif("工作区代码已完全还原成功！", "success");
+        reloadData();
+      } catch (err) {
+        showNotif("还原工作区失败: " + err, "danger");
+      }
+    }
+  };
 
   const handleSwitchProfile = async (alias: string, global: boolean) => {
     try {
@@ -286,26 +364,6 @@ function App() {
     }
   };
 
-  const handleDeleteBranch = async (name: string) => {
-    if (confirm(`确定要删除分支 '${name}' 吗？`)) {
-      try {
-        const out: string = await invoke("git_delete_branch", { name, force: false });
-        showNotif(out || `分支 '${name}' 已删除`, "success");
-        reloadData();
-      } catch (err) {
-        if (confirm(`删除普通分支失败 (${err})，是否进行强行删除？`)) {
-          try {
-            const forceOut: string = await invoke("git_delete_branch", { name, force: true });
-            showNotif(forceOut || `分支 '${name}' 已被强制删除`, "success");
-            reloadData();
-          } catch (fErr) {
-            showNotif("强制删除分支失败: " + fErr, "danger");
-          }
-        }
-      }
-    }
-  };
-
   const handleStageAll = async () => {
     try {
       await invoke("git_stage_files", { specs: ["."] });
@@ -333,9 +391,9 @@ function App() {
 
   const handleGitFetch = async () => {
     try {
-      showNotif("正在拉取远程变更 (Git Fetch)...", "info");
+      showNotif("正在拉取远程变更...", "info");
       const out: string = await invoke("git_fetch");
-      showNotif(out || "Fetch 抓取远程成功，本地分支状态已刷新", "success");
+      showNotif(out || "Fetch 抓取远程成功", "success");
       reloadData();
     } catch (err) {
       showNotif("Fetch 失败: " + err, "danger");
@@ -344,7 +402,7 @@ function App() {
 
   const handleGitPull = async () => {
     try {
-      showNotif("正在拉取远程变更并合并 (Git Pull)...", "info");
+      showNotif("正在拉取远程变更并合并...", "info");
       const out: string = await invoke("git_pull", { alias: null, global: false });
       showNotif("Pull 合并成功，工作区已与远程对齐", "success");
       reloadData();
@@ -355,9 +413,9 @@ function App() {
 
   const handleGitPush = async () => {
     try {
-      showNotif("正在推送本地提交至远程 (Git Push)...", "info");
+      showNotif("正在推送本地提交至远程...", "info");
       const out: string = await invoke("git_push");
-      showNotif("Push 成功！远程仓库已同步", "success");
+      showNotif("Push 推送成功，远程已完全同步", "success");
       reloadData();
     } catch (err) {
       showNotif("Push 失败: " + err, "danger");
@@ -370,7 +428,7 @@ function App() {
       return;
     }
     try {
-      showNotif("正在执行本地提交 (Commit)...", "info");
+      showNotif("正在执行本地提交...", "info");
       await invoke("git_commit", {
         message: commitMsg.trim(),
         all: commitStageAll,
@@ -389,16 +447,6 @@ function App() {
     showNotif("提交 Hash 已复制到剪贴板", "success");
   };
 
-  const handleHeaderMouseDown = async (e: React.MouseEvent) => {
-    if (e.button === 0 && !(e.target as HTMLElement).closest("button, select, input, a")) {
-      try {
-        await appWindow.startDragging();
-      } catch (err) {
-        console.error("Failed to start dragging:", err);
-      }
-    }
-  };
-
   const handleMinimize = async () => {
     try {
       await appWindow.minimize();
@@ -415,9 +463,21 @@ function App() {
     }
   };
 
+  const handleHeaderMouseDown = async (e: React.MouseEvent) => {
+    if (e.button === 0 && !(e.target as HTMLElement).closest("button, select, input, a")) {
+      try {
+        await appWindow.startDragging();
+      } catch (err) {
+        console.error("Failed to start dragging:", err);
+      }
+    }
+  };
+
+  const activeRepo = repos.find(r => r.path === activeRepoPath);
+
   return (
     <div className="app-container">
-      {/* Top Titlebar */}
+      {/* Top Titlebar Navigation */}
       <header className="app-header" data-tauri-drag-region onMouseDown={handleHeaderMouseDown}>
         <div className="brand" data-tauri-drag-region>
           <span className="logo" data-tauri-drag-region>HG</span>
@@ -426,12 +486,19 @@ function App() {
         </div>
         <div className="repo-badge" data-tauri-drag-region>
           <span className={`indicator ${status?.is_repo ? "green" : "red"}`} data-tauri-drag-region></span>
-          <span className="text" data-tauri-drag-region>{status?.is_repo ? "已连接 Git 仓库" : "未检测到 Git 仓库"}</span>
+          <span className="text" data-tauri-drag-region style={{ fontWeight: "600" }}>
+            {status?.is_repo ? `当前仓库: ${activeRepo?.name || "本地目录"}` : "未连接 Git 仓库"}
+          </span>
         </div>
         <div className="header-actions">
-          <button className="icon-btn" onClick={handleOpenProxy} title="代理设置">
+          <button className="icon-btn" onClick={handleOpenProxy} title="网络代理配置">
             代理
           </button>
+          {status?.is_repo && (
+            <button className="icon-btn" onClick={() => setActiveModal("github")} title="GitHub 别名关联">
+              GitHub 关联
+            </button>
+          )}
           <button className="icon-btn win-ctrl-btn" onClick={handleMinimize} title="最小化" style={{ minWidth: "32px", padding: "6px 0", justifyContent: "center" }}>
             -
           </button>
@@ -441,11 +508,43 @@ function App() {
         </div>
       </header>
 
-      {/* Main Workspace Layout */}
-      <div className="main-layout">
-        {/* Left Side: Identities & Profiles */}
-        <aside className="sidebar-left">
+      {/* Main Workspace Three-Column Layout */}
+      <div className="main-layout" style={{ flex: 1, overflow: "hidden", display: "flex", gap: "16px", padding: "16px" }}>
+        {/* Left Side: RepoSwitcher & Identity */}
+        <aside className="sidebar-left" style={{ width: "290px", display: "flex", flexDirection: "column", gap: "16px", flexShrink: 0 }}>
+          <RepoSidebar
+            repos={repos}
+            activePath={activeRepoPath}
+            onSwitchRepo={handleSwitchRepo}
+            onAddRepo={handleAddRepo}
+            onRemoveRepo={handleRemoveRepo}
+          />
           <IdentityPanel status={status} />
+        </aside>
+
+        {/* Center: Stage List, Commit Tab & Commit History (Combined) */}
+        <main className="workspace-center" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <WorkspacePanel
+            status={status}
+            gitStatus={gitStatus}
+            commitMsg={commitMsg}
+            setCommitMsg={setCommitMsg}
+            commitStageAll={commitStageAll}
+            setCommitStageAll={setCommitStageAll}
+            commitProfile={commitProfile}
+            setCommitProfile={setCommitProfile}
+            onStageFile={handleStageFile}
+            onStageAll={handleStageAll}
+            onGitCommit={handleGitCommit}
+            commits={commits}
+            onCopyHash={handleCopyHash}
+            onUndoAll={handleUndoAll}
+          />
+        </main>
+
+        {/* Right Side: Quick Actions Panel & Accounts Profiles Panel */}
+        <aside className="sidebar-right" style={{ width: "310px", display: "flex", flexDirection: "column", gap: "16px", flexShrink: 0 }}>
+          <QuickActionsPanel activePath={activeRepoPath} showNotif={showNotif} />
           
           <ProfilesPanel
             status={status}
@@ -466,45 +565,64 @@ function App() {
             }}
           />
         </aside>
-
-        {/* Center: Stage List & Commit Controls */}
-        <main className="workspace-center">
-          <WorkspacePanel
-            status={status}
-            gitStatus={gitStatus}
-            commitMsg={commitMsg}
-            setCommitMsg={setCommitMsg}
-            commitStageAll={commitStageAll}
-            setCommitStageAll={setCommitStageAll}
-            commitProfile={commitProfile}
-            setCommitProfile={setCommitProfile}
-            onStageFile={handleStageFile}
-            onStageAll={handleStageAll}
-            onGitFetch={handleGitFetch}
-            onGitPull={handleGitPull}
-            onGitPush={handleGitPush}
-            onGitCommit={handleGitCommit}
-          />
-        </main>
-
-        {/* Right Side: Branches & Commit History */}
-        <aside className="sidebar-right">
-          <BranchPanel
-            status={status}
-            branches={branches}
-            currentBranch={currentBranch}
-            onCheckoutBranch={handleCheckoutBranch}
-            onCreateBranch={handleCreateBranch}
-            onDeleteBranch={handleDeleteBranch}
-          />
-
-          <HistoryPanel
-            status={status}
-            commits={commits}
-            onCopyHash={handleCopyHash}
-          />
-        </aside>
       </div>
+
+      {/* Bottom Bar: Branch Switcher & neon Sync buttons */}
+      {status?.is_repo && (
+        <footer className="app-footer" style={{
+          height: "56px",
+          minHeight: "56px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 20px",
+          background: "rgba(13, 17, 28, 0.9)",
+          borderTop: "1px solid var(--border-color)",
+          zIndex: 5
+        }}>
+          {/* Branch Switcher Select */}
+          <div className="bottom-branch-block" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)", fontWeight: "600" }}>活动分支:</span>
+            <select
+              id="active-branch-sel"
+              value={currentBranch}
+              onChange={(e) => e.target.value && handleCheckoutBranch(e.target.value)}
+              style={{
+                padding: "6px 12px",
+                background: "rgba(0,0,0,0.3)",
+                borderRadius: "6px",
+                border: "1px solid var(--border-color)",
+                color: "#fff",
+                fontSize: "0.8rem",
+                fontWeight: "600",
+                cursor: "pointer"
+              }}
+            >
+              {branches.map((b) => (
+                <option value={b} key={b}>
+                  ● {b}
+                </option>
+              ))}
+            </select>
+            <button className="btn btn-sm btn-secondary" onClick={handleCreateBranch} style={{ fontSize: "0.75rem" }}>
+              + 新建分支
+            </button>
+          </div>
+
+          {/* Sync neon Actions */}
+          <div className="bottom-sync-block" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <button className="btn btn-sm btn-secondary" onClick={handleGitFetch}>
+              Fetch 抓取
+            </button>
+            <button className="btn btn-sm btn-secondary" onClick={handleGitPull}>
+              Pull 拉取
+            </button>
+            <button className="btn btn-sm btn-primary" onClick={handleGitPush}>
+              Push 推送至 Origin
+            </button>
+          </div>
+        </footer>
+      )}
 
       {/* MODALS */}
       <AddProfileModal

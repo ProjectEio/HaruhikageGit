@@ -474,3 +474,35 @@ pub fn git_unstage_files(specs: Vec<String>) -> Result<()> {
     let refs: Vec<&str> = specs.iter().map(|s| s.as_str()).collect();
     git::reset_files(&refs)
 }
+
+pub fn get_managed_repositories() -> Result<Vec<crate::core::config::ManagedRepository>> {
+    let cfg = Config::load()?;
+    Ok(cfg.repositories)
+}
+
+pub fn add_managed_repository(
+    name: &str,
+    path: PathBuf,
+    organization: &str,
+    user: &str,
+    custom_group: &str,
+) -> Result<()> {
+    let mut cfg = Config::load()?;
+    if cfg.repositories.iter().any(|r| r.path == path) {
+        bail!("该仓库路径已被添加托管");
+    }
+    cfg.repositories.push(crate::core::config::ManagedRepository {
+        name: name.to_string(),
+        path,
+        organization: organization.to_string(),
+        user: user.to_string(),
+        custom_group: custom_group.to_string(),
+    });
+    cfg.save()
+}
+
+pub fn remove_managed_repository(path: PathBuf) -> Result<()> {
+    let mut cfg = Config::load()?;
+    cfg.repositories.retain(|r| r.path != path);
+    cfg.save()
+}

@@ -37,6 +37,15 @@ impl Default for ProxySettings {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManagedRepository {
+    pub name: String,
+    pub path: PathBuf,
+    pub organization: String,
+    pub user: String,
+    pub custom_group: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Config {
     #[serde(default)]
@@ -45,6 +54,8 @@ pub struct Config {
     pub github_client_id: Option<String>,
     #[serde(default)]
     pub proxy: ProxySettings,
+    #[serde(default)]
+    pub repositories: Vec<ManagedRepository>,
 }
 
 impl Config {
