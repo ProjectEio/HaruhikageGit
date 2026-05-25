@@ -137,6 +137,17 @@ body {
 }
 
 /* Custom Timed Animations */
+@keyframes slideDown {
+  from {
+    transform: translateY(-12px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-2px); }
@@ -1228,5 +1239,15 @@ body {
 .close-btn-flat:hover {
   color: var(--color-danger) !important;
   background: transparent !important;
+}
+
+.repo-sidebar-collapsed {
+  transition: all var(--transition-fast) !important;
+}
+
+.repo-sidebar-collapsed:hover {
+  border-color: var(--color-primary) !important;
+  box-shadow: var(--shadow-glow) !important;
+  transform: translateY(-1px);
 }
 

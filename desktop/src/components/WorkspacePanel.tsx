@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { GitFileStatus, StatusInfo, CommitInfo } from "../types";
 
 interface WorkspacePanelProps {
@@ -37,15 +37,7 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
   onSelectFileForPreview,
 }) => {
   const hasChanges = gitStatus.length > 0;
-  const [activeTab, setActiveTab] = useState<"changes" | "history">("history");
-
-  useEffect(() => {
-    if (hasChanges) {
-      setActiveTab("changes");
-    } else {
-      setActiveTab("history");
-    }
-  }, [hasChanges]);
+  const [activeTab, setActiveTab] = useState<"changes" | "history">("changes");
 
   const hasUnstaged = gitStatus.some((f) => f.status !== "staged");
 
@@ -57,29 +49,28 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
           {activeTab === "changes" ? "未提交工作区" : "项目提交历史"}
         </h3>
         
-        {/* Tab switchers: Only visible when there are uncommitted changes */}
-        {hasChanges && (
-          <div className="tab-switcher" style={{ display: "flex", background: "#f1f5f9", borderRadius: "6px", padding: "2px", border: "1px solid var(--border-color)" }}>
-            <button
-              className={`tab-btn ${activeTab === "changes" ? "active" : ""}`}
-              onClick={() => setActiveTab("changes")}
-              style={{ border: "none", background: "transparent", color: activeTab === "changes" ? "#fff" : "var(--text-secondary)", fontSize: "0.75rem", padding: "4px 10px", cursor: "pointer", borderRadius: "4px", fontWeight: "600", transition: "all 0.2s" }}
-            >
-              未提交变更 ({gitStatus.length})
-            </button>
-            <button
-              className={`tab-btn ${activeTab === "history" ? "active" : ""}`}
-              onClick={() => setActiveTab("history")}
-              style={{ border: "none", background: "transparent", color: activeTab === "history" ? "#fff" : "var(--text-secondary)", fontSize: "0.75rem", padding: "4px 10px", cursor: "pointer", borderRadius: "4px", fontWeight: "600", transition: "all 0.2s" }}
-            >
-              提交历史
-            </button>
-          </div>
-        )}
+        {/* Tab switchers: Always visible */}
+        <div className="tab-switcher" style={{ display: "flex", background: "#f1f5f9", borderRadius: "6px", padding: "2px", border: "1px solid var(--border-color)" }}>
+          <button
+            className={`tab-btn ${activeTab === "changes" ? "active" : ""}`}
+            onClick={() => setActiveTab("changes")}
+            style={{ border: "none", background: "transparent", color: activeTab === "changes" ? "#fff" : "var(--text-secondary)", fontSize: "0.75rem", padding: "4px 10px", cursor: "pointer", borderRadius: "4px", fontWeight: "600", transition: "all 0.2s" }}
+          >
+            未提交变更 ({gitStatus.length})
+          </button>
+          <button
+            className={`tab-btn ${activeTab === "history" ? "active" : ""}`}
+            onClick={() => setActiveTab("history")}
+            style={{ border: "none", background: "transparent", color: activeTab === "history" ? "#fff" : "var(--text-secondary)", fontSize: "0.75rem", padding: "4px 10px", cursor: "pointer", borderRadius: "4px", fontWeight: "600", transition: "all 0.2s" }}
+          >
+            提交历史
+          </button>
+        </div>
       </div>
 
       {/* Tab Contents: Changes Panel */}
-      {activeTab === "changes" && hasChanges && (
+      {activeTab === "changes" && (
+        hasChanges ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "14px", animation: "modalIn 0.2s ease" }}>
           {/* File Staging Table */}
           <div className="files-container">
@@ -189,6 +180,13 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
             </div>
           </div>
         </div>
+        ) : (
+          <div className="empty-placeholder" style={{ padding: "50px 20px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px", border: "1px dashed var(--border-color)", borderRadius: "var(--radius-md)", background: "#fafafa" }}>
+            <span style={{ fontSize: "1.8rem", color: "var(--color-success)" }}>✓</span>
+            <span style={{ fontWeight: "600", fontSize: "0.9rem", color: "var(--text-primary)" }}>工作区干净</span>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", maxWidth: "80%", textAlign: "center" }}>没有任何未暂存或未提交的变更，代码已完全同步。</span>
+          </div>
+        )
       )}
 
       {/* Tab Contents: History Panel */}

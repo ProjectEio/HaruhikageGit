@@ -506,7 +506,7 @@ function App() {
       {/* Main Workspace Three-Column Layout */}
       <div className="main-layout" style={{ flex: 1, overflow: "hidden", display: "flex", gap: "16px", padding: "16px" }}>
         {/* Left Side: RepoSwitcher & Identity */}
-        <aside className="sidebar-left" style={{ width: "290px", display: "flex", flexDirection: "column", gap: "16px", flexShrink: 0 }}>
+        <aside className="sidebar-left" style={{ width: "290px", display: "flex", flexDirection: "column", gap: "16px", flexShrink: 0, position: "relative" }}>
           <RepoSidebar
             repos={repos}
             activePath={activeRepoPath}

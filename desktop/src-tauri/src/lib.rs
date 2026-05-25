@@ -201,7 +201,9 @@ fn open_in_vscode(path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn get_remote_url() -> Result<String, String> {
+    let cwd = std::env::current_dir().unwrap_or_default();
     let out = Command::new("git")
+        .current_dir(&cwd)
         .args(&["remote", "get-url", "origin"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -214,7 +216,9 @@ fn get_remote_url() -> Result<String, String> {
 
 #[tauri::command]
 fn git_discard_changes() -> Result<(), String> {
+    let cwd = std::env::current_dir().unwrap_or_default();
     let out1 = Command::new("git")
+        .current_dir(&cwd)
         .args(&["reset", "--hard", "HEAD"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -222,6 +226,7 @@ fn git_discard_changes() -> Result<(), String> {
         return Err(String::from_utf8_lossy(&out1.stderr).trim().to_string());
     }
     let out2 = Command::new("git")
+        .current_dir(&cwd)
         .args(&["clean", "-df"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -233,7 +238,9 @@ fn git_discard_changes() -> Result<(), String> {
 
 #[tauri::command]
 fn get_file_diff(path: String) -> Result<String, String> {
+    let cwd = std::env::current_dir().unwrap_or_default();
     let out = Command::new("git")
+        .current_dir(&cwd)
         .args(&["diff", "HEAD", "--", &path])
         .output()
         .map_err(|e| e.to_string())?;
@@ -242,8 +249,13 @@ fn get_file_diff(path: String) -> Result<String, String> {
         Ok(diff)
     } else {
         let p = std::path::Path::new(&path);
-        if p.exists() && p.is_file() {
-            let content = std::fs::read_to_string(p).unwrap_or_else(|_| "无法读取该文件内容".to_string());
+        let abs_p = if p.is_relative() {
+            cwd.join(p)
+        } else {
+            p.to_path_buf()
+        };
+        if abs_p.exists() && abs_p.is_file() {
+            let content = std::fs::read_to_string(&abs_p).unwrap_or_else(|_| "无法读取该文件内容".to_string());
             let mut diff_mock = format!("--- /dev/null\n+++ b/{}\n@@ -0,0 +1,{} @@\n", path, content.lines().count());
             for line in content.lines() {
                 diff_mock.push_str(&format!("+{}\n", line));

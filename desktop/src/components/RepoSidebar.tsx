@@ -20,6 +20,7 @@ export const RepoSidebar: React.FC<RepoSidebarProps> = ({
 }) => {
   const [groupBy, setGroupBy] = useState<GroupBy>("org");
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
 
   // Form states
   const [name, setName] = useState("");
@@ -69,17 +70,88 @@ export const RepoSidebar: React.FC<RepoSidebarProps> = ({
     setIsAddOpen(false);
   };
 
+  const activeRepo = repos.find((r) => r.path === activePath);
+  const activeRepoName = activeRepo ? activeRepo.name : "未关联本地仓库";
+
+  if (isCollapsed) {
+    return (
+      <div
+        className="section-card repo-sidebar-collapsed"
+        onClick={() => setIsCollapsed(false)}
+        style={{
+          height: "38px",
+          minHeight: "38px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 14px",
+          cursor: "pointer",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border-color)",
+          borderRadius: "var(--radius-md)",
+          boxShadow: "var(--shadow-lg)",
+          transition: "all var(--transition-fast)",
+          flexDirection: "row",
+          gap: "8px",
+          userSelect: "none"
+        }}
+        title="点击展开仓库管理器"
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ color: "var(--color-primary)", fontSize: "0.95rem" }}>📂</span>
+          <span style={{ fontWeight: "600", fontSize: "0.8rem", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {activeRepoName}
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+          <span style={{ fontSize: "0.65rem", color: "var(--text-muted)", background: "rgba(0,0,0,0.03)", padding: "2px 6px", borderRadius: "4px", fontWeight: "600" }}>切换管理</span>
+          <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)" }}>▼</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="section-card repo-sidebar" style={{ flex: 1, minHeight: "350px", display: "flex", flexDirection: "column", gap: "10px" }}>
-      <div className="section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h3 className="section-title">仓库管理器</h3>
-        <button
-          className="btn btn-sm btn-primary"
-          onClick={() => setIsAddOpen(true)}
-          title="添加本地 Git 仓库托管"
-        >
-          + 托管
-        </button>
+    <div
+      className="section-card repo-sidebar"
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 100,
+        background: "var(--bg-sidebar)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "10px",
+        padding: "14px",
+        boxShadow: "var(--shadow-lg)",
+        animation: "slideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+        maxHeight: "100%",
+        overflow: "hidden"
+      }}
+    >
+      <div className="section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "8px" }}>
+        <h3 className="section-title" style={{ fontSize: "0.85rem" }}>📂 仓库管理</h3>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={() => setIsAddOpen(true)}
+            title="添加本地 Git 仓库托管"
+            style={{ fontSize: "0.7rem", padding: "4px 8px" }}
+          >
+            + 托管
+          </button>
+          <button
+            className="btn btn-sm btn-secondary"
+            onClick={() => setIsCollapsed(true)}
+            title="收起面板"
+            style={{ fontSize: "0.7rem", padding: "4px 8px", background: "rgba(0,0,0,0.03)", border: "1px solid var(--border-color)", color: "var(--text-primary)" }}
+          >
+            ▲ 收起
+          </button>
+        </div>
       </div>
 
       {/* Grouping Tabs */}
@@ -108,7 +180,7 @@ export const RepoSidebar: React.FC<RepoSidebarProps> = ({
       </div>
 
       {/* Repositories Tree List */}
-      <div className="repos-tree-wrapper" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px", maxHeight: "380px" }}>
+      <div className="repos-tree-wrapper" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px" }}>
         {Object.keys(grouped).length === 0 ? (
           <div className="empty-placeholder" style={{ padding: "30px 10px" }}>
             暂无托管的 Git 仓库
