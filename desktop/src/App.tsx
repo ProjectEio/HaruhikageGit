@@ -481,27 +481,15 @@ function App() {
       {/* Top Titlebar Navigation (Abbreviation/logo removed, and solid text colors instead of gradient) */}
       <header className="app-header" data-tauri-drag-region onMouseDown={handleHeaderMouseDown}>
         <div className="brand" data-tauri-drag-region>
-          <span className="title" data-tauri-drag-region style={{ background: "none", color: "var(--text-primary)", WebkitTextFillColor: "var(--text-primary)", paddingLeft: "4px" }}>
+          <span className="title" data-tauri-drag-region style={{ paddingLeft: "4px" }}>
             HaruhikageGit
           </span>
         </div>
-        <div className="header-actions" style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+        <div className="header-actions">
           <button
             className="win-btn-flat"
             onClick={handleOpenProxy}
             title="设置与代理"
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "var(--text-secondary)",
-              cursor: "pointer",
-              fontSize: "1.1rem",
-              padding: "4px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transition: "color var(--transition-fast)"
-            }}
           >
             ⚙
           </button>
@@ -509,18 +497,6 @@ function App() {
             className="win-btn-flat close-btn-flat"
             onClick={handleClose}
             title="关闭窗口"
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "var(--text-secondary)",
-              cursor: "pointer",
-              fontSize: "1.1rem",
-              padding: "4px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transition: "color var(--transition-fast)"
-            }}
           >
             ✕
           </button>
