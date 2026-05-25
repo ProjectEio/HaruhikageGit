@@ -53,7 +53,7 @@ export const DiffAndActionsArea: React.FC<DiffAndActionsAreaProps> = ({
   const handleOpenExplorer = () => {
     if (activePath) {
       invoke("open_in_explorer", { path: activePath }).catch(err => {
-        if (showNotif) showNotif(`无法打开文件管理器: ${err}`, "error");
+        if (showNotif) showNotif(`无法打开文件管理器: ${err}`, "danger");
       });
     }
   };
@@ -61,7 +61,7 @@ export const DiffAndActionsArea: React.FC<DiffAndActionsAreaProps> = ({
   const handleOpenVSCode = () => {
     if (activePath) {
       invoke("open_in_vscode", { path: activePath }).catch(err => {
-        if (showNotif) showNotif(`无法打开VSCode: ${err}`, "error");
+        if (showNotif) showNotif(`无法打开VSCode: ${err}`, "danger");
       });
     }
   };

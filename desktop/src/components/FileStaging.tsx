@@ -1,10 +1,10 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { GitFileStatus } from "../types";
 
 interface FileStagingProps {
   gitStatus: GitFileStatus[];
   onStageFiles: (paths: string[], stage: boolean) => void;
-  onStageAll: () => void;
+
   onUndoAll: () => void;
   onSelectFileForPreview: (path: string) => void;
 }
@@ -45,7 +45,7 @@ export const FileStaging: React.FC<FileStagingProps> = ({
   }, [uniqueFiles, filter]);
 
   const hasChanges = uniqueFiles.length > 0;
-  const hasUnstaged = uniqueFiles.some((f) => !f.isStaged);
+
   
   const allFilteredStaged = filteredFiles.length > 0 && filteredFiles.every(f => f.isStaged);
   const someFilteredStaged = filteredFiles.some(f => f.isStaged);

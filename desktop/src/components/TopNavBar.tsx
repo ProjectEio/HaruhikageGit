@@ -146,7 +146,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
       userSelect: "none",
       position: "relative",
       zIndex: 1000
-    }} className="top-nav-bar">
+    } as any} className="top-nav-bar">
       
       {/* 1. Repository Switcher */}
       <div 
@@ -293,7 +293,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
           padding: "0 16px",
           cursor: "pointer",
           WebkitAppRegion: "no-drag"
-        }}
+        } as any}
         className="hover-bg"
         onClick={handleSync}
       >

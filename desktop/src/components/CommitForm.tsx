@@ -46,8 +46,8 @@ export const CommitForm: React.FC<CommitFormProps> = ({
     }
   }, [summary, description]);
 
-  const activeIdentityName = status?.local_name || status?.global_name || "Guest";
-  const activeIdentityEmail = status?.local_email || status?.global_email || "guest@haruhikage.git";
+  const activeIdentityName = status?.local_name ?? status?.global_name ?? "Guest";
+  const activeIdentityEmail = status?.local_email ?? status?.global_email ?? "guest@haruhikage.git";
 
   const getAvatarInitials = (name: string) => {
     if (!name) return "?";
@@ -206,12 +206,12 @@ export const CommitForm: React.FC<CommitFormProps> = ({
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "38px" }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ cursor: "pointer" }} title="Add Co-authors">
+          <span title="Add Co-authors"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ cursor: "pointer" }}>
             <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
             <circle cx="8.5" cy="7" r="4"></circle>
             <line x1="20" y1="8" x2="20" y2="14"></line>
             <line x1="23" y1="11" x2="17" y2="11"></line>
-          </svg>
+          </svg></span>
         </div>
         <div className="checkbox-wrapper" style={{ paddingTop: "0" }}>
           <input

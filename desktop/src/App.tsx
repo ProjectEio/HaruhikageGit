@@ -109,8 +109,10 @@ function App() {
 
         // Fetch Working Tree
         const files: GitFileStatus[] = await invoke("get_git_status");
-        console.log("[App] get_git_status returned:", JSON.stringify(files.map(f => ({ path: f.path, status: f.status, pathBytes: Array.from(f.path).map(c => c.charCodeAt(0)).slice(0, 8) }))));
-        setGitStatus(files);
+        setGitStatus(prev => {
+          if (prev.length === files.length && JSON.stringify(prev) === JSON.stringify(files)) return prev;
+          return files;
+        });
 
 
         // Fetch Branches
@@ -128,18 +130,28 @@ function App() {
 
         // Fetch Commits
         const logs: CommitInfo[] = await invoke("get_git_commits", { limit: 100 });
-        setCommits(logs);
+        setCommits(prev => {
+          if (prev.length === logs.length && prev[0]?.hash === logs[0]?.hash) return prev;
+          return logs;
+        });
         
         // Fetch Current Branch
         try {
           const c: string = await invoke("get_current_branch");
           setCurrentBranch(c);
-          
-          // Fetch Sync Status
-          const sync: SyncStatus = await invoke("get_sync_status");
-          setSyncStatus(sync);
         } catch (e) {
           setCurrentBranch("unknown");
+        }
+
+        try {
+          // Fetch Sync Status
+          const sync: SyncStatus = await invoke("get_sync_status");
+          setSyncStatus(prev => {
+            if (prev && prev.ahead === sync.ahead && prev.behind === sync.behind && prev.has_upstream === sync.has_upstream) return prev;
+            return sync;
+          });
+        } catch (e) {
+          console.error("Failed to get sync status", e);
         }
       } else {
         setGitStatus([]);
