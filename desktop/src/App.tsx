@@ -9,6 +9,7 @@ import { ProfilesPanel } from "./components/ProfilesPanel";
 import { WorkspacePanel } from "./components/WorkspacePanel";
 import { RepoSidebar } from "./components/RepoSidebar";
 import { QuickActionsPanel } from "./components/QuickActionsPanel";
+import { FilePreviewPanel } from "./components/FilePreviewPanel";
 import { AddProfileModal, GithubLoginModal, ProxyModal } from "./components/Modals";
 
 function App() {
@@ -24,6 +25,9 @@ function App() {
   // Multi-repository states
   const [repos, setRepos] = useState<ManagedRepository[]>([]);
   const [activeRepoPath, setActiveRepoPath] = useState<string | null>(null);
+
+  // File Preview state
+  const [selectedPreviewPath, setSelectedPreviewPath] = useState<string | null>(null);
 
   // Proxy States
   const [proxyAuto, setProxyAuto] = useState(true);
@@ -73,7 +77,6 @@ function App() {
       // Auto-set first repo as active if not yet set and we have repos
       if (list.length > 0 && !activeRepoPath) {
         setActiveRepoPath(list[0].path);
-        // Switch working dir in backend
         await invoke("switch_active_repository", { path: list[0].path });
       }
     } catch (err) {
@@ -133,6 +136,11 @@ function App() {
     }, 4500);
     return () => clearInterval(interval);
   }, [activeModal, activeRepoPath]);
+
+  // Reset selected file preview when active repository changes
+  useEffect(() => {
+    setSelectedPreviewPath(null);
+  }, [activeRepoPath]);
 
   // --- GitHub OAuth Token Polling ---
   useEffect(() => {
@@ -236,6 +244,7 @@ function App() {
         showNotif("正在还原工作区代码...", "info");
         await invoke("git_discard_changes");
         showNotif("工作区代码已完全还原成功！", "success");
+        setSelectedPreviewPath(null); // Reset preview on discard
         reloadData();
       } catch (err) {
         showNotif("还原工作区失败: " + err, "danger");
@@ -403,7 +412,7 @@ function App() {
   const handleGitPull = async () => {
     try {
       showNotif("正在拉取远程变更并合并...", "info");
-      const out: string = await invoke("git_pull", { alias: null, global: false });
+      await invoke("git_pull", { alias: null, global: false });
       showNotif("Pull 合并成功，工作区已与远程对齐", "success");
       reloadData();
     } catch (err) {
@@ -414,7 +423,7 @@ function App() {
   const handleGitPush = async () => {
     try {
       showNotif("正在推送本地提交至远程...", "info");
-      const out: string = await invoke("git_push");
+      await invoke("git_push");
       showNotif("Push 推送成功，远程已完全同步", "success");
       reloadData();
     } catch (err) {
@@ -436,6 +445,7 @@ function App() {
       });
       showNotif("Git Commit 提交成功！", "success");
       setCommitMsg("");
+      setSelectedPreviewPath(null); // Reset preview on successful commit
       reloadData();
     } catch (err) {
       showNotif("提交失败: " + err, "danger");
@@ -477,12 +487,12 @@ function App() {
 
   return (
     <div className="app-container">
-      {/* Top Titlebar Navigation */}
+      {/* Top Titlebar Navigation (Abbreviation/logo removed, and solid text colors instead of gradient) */}
       <header className="app-header" data-tauri-drag-region onMouseDown={handleHeaderMouseDown}>
         <div className="brand" data-tauri-drag-region>
-          <span className="logo" data-tauri-drag-region>HG</span>
-          <span className="title" data-tauri-drag-region>HaruhikageGit</span>
-          <span className="version" data-tauri-drag-region>v0.1.0</span>
+          <span className="title" data-tauri-drag-region style={{ background: "none", color: "var(--text-primary)", WebkitTextFillColor: "var(--text-primary)", paddingLeft: "4px" }}>
+            HaruhikageGit
+          </span>
         </div>
         <div className="repo-badge" data-tauri-drag-region>
           <span className={`indicator ${status?.is_repo ? "green" : "red"}`} data-tauri-drag-region></span>
@@ -539,35 +549,45 @@ function App() {
             commits={commits}
             onCopyHash={handleCopyHash}
             onUndoAll={handleUndoAll}
+            onSelectFileForPreview={(path) => setSelectedPreviewPath(path)} // Toggle preview
           />
         </main>
 
-        {/* Right Side: Quick Actions Panel & Accounts Profiles Panel */}
-        <aside className="sidebar-right" style={{ width: "310px", display: "flex", flexDirection: "column", gap: "16px", flexShrink: 0 }}>
-          <QuickActionsPanel activePath={activeRepoPath} showNotif={showNotif} />
-          
-          <ProfilesPanel
-            status={status}
-            onSwitchProfile={handleSwitchProfile}
-            onDeleteProfile={handleDeleteProfile}
-            onOpenAddModal={() => {
-              setNewAlias("");
-              setNewName("");
-              setNewEmail("");
-              setNewGpg("");
-              setActiveModal("add");
-            }}
-            onOpenGithubModal={() => {
-              setGithubAlias("github");
-              setGithubPat("");
-              setGithubDevice(null);
-              setActiveModal("github");
-            }}
-          />
+        {/* Right Side: Quick Actions Panel & Accounts Profiles Panel OR Full Diff Preview */}
+        <aside className="sidebar-right" style={{ width: "310px", display: "flex", flexDirection: "column", gap: "16px", flexShrink: 0, height: "100%", overflow: "hidden" }}>
+          {selectedPreviewPath ? (
+            <FilePreviewPanel
+              filePath={selectedPreviewPath}
+              onClose={() => setSelectedPreviewPath(null)}
+            />
+          ) : (
+            <>
+              <QuickActionsPanel activePath={activeRepoPath} showNotif={showNotif} />
+              
+              <ProfilesPanel
+                status={status}
+                onSwitchProfile={handleSwitchProfile}
+                onDeleteProfile={handleDeleteProfile}
+                onOpenAddModal={() => {
+                  setNewAlias("");
+                  setNewName("");
+                  setNewEmail("");
+                  setNewGpg("");
+                  setActiveModal("add");
+                }}
+                onOpenGithubModal={() => {
+                  setGithubAlias("github");
+                  setGithubPat("");
+                  setGithubDevice(null);
+                  setActiveModal("github");
+                }}
+              />
+            </>
+          )}
         </aside>
       </div>
 
-      {/* Bottom Bar: Branch Switcher & neon Sync buttons */}
+      {/* Bottom Bar: Branch Switcher & neon Sync buttons (With Suitable Colors) */}
       {status?.is_repo && (
         <footer className="app-footer" style={{
           height: "56px",
@@ -576,8 +596,8 @@ function App() {
           alignItems: "center",
           justifyContent: "space-between",
           padding: "0 20px",
-          background: "rgba(13, 17, 28, 0.9)",
-          borderTop: "1px solid var(--border-color)",
+          background: "#fdf2f8", // Sakura soft pink background
+          borderTop: "1px solid rgba(236, 72, 153, 0.15)",
           zIndex: 5
         }}>
           {/* Branch Switcher Select */}
@@ -589,10 +609,10 @@ function App() {
               onChange={(e) => e.target.value && handleCheckoutBranch(e.target.value)}
               style={{
                 padding: "6px 12px",
-                background: "rgba(0,0,0,0.3)",
+                background: "#ffffff",
                 borderRadius: "6px",
-                border: "1px solid var(--border-color)",
-                color: "#fff",
+                border: "1px solid rgba(236, 72, 153, 0.2)",
+                color: "var(--text-primary)",
                 fontSize: "0.8rem",
                 fontWeight: "600",
                 cursor: "pointer"
@@ -604,17 +624,17 @@ function App() {
                 </option>
               ))}
             </select>
-            <button className="btn btn-sm btn-secondary" onClick={handleCreateBranch} style={{ fontSize: "0.75rem" }}>
+            <button className="btn btn-sm btn-secondary" onClick={handleCreateBranch} style={{ fontSize: "0.75rem", border: "1px solid rgba(236, 72, 153, 0.2)" }}>
               + 新建分支
             </button>
           </div>
 
           {/* Sync neon Actions */}
           <div className="bottom-sync-block" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <button className="btn btn-sm btn-secondary" onClick={handleGitFetch}>
+            <button className="btn btn-sm btn-secondary" onClick={handleGitFetch} style={{ border: "1px solid rgba(236, 72, 153, 0.2)" }}>
               Fetch 抓取
             </button>
-            <button className="btn btn-sm btn-secondary" onClick={handleGitPull}>
+            <button className="btn btn-sm btn-secondary" onClick={handleGitPull} style={{ border: "1px solid rgba(236, 72, 153, 0.2)" }}>
               Pull 拉取
             </button>
             <button className="btn btn-sm btn-primary" onClick={handleGitPush}>
@@ -672,7 +692,7 @@ function App() {
           let bg = "linear-gradient(135deg, #3b82f6, #2563eb)";
           let prefix = "";
           if (n.type === "success") {
-            bg = "linear-gradient(135deg, #10b981, #059669)";
+            bg = "linear-gradient(135deg, #ec4899, #db2777)"; // Sakura pink notification
             prefix = "";
           } else if (n.type === "danger") {
             bg = "linear-gradient(135deg, #ef4444, #dc2626)";
@@ -687,7 +707,7 @@ function App() {
                 padding: "12px 24px",
                 borderRadius: "8px",
                 color: "#fff",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
                 fontSize: "0.85rem",
                 fontWeight: "600",
                 animation: "modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)"

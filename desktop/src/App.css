@@ -91,27 +91,11 @@ body {
   gap: 8px;
 }
 
-.brand .logo {
-  font-size: 1.3rem;
-  animation: float 3s ease-in-out infinite;
-}
-
 .brand .title {
   font-weight: 700;
   font-family: 'Outfit', sans-serif;
   letter-spacing: 0.5px;
-  background: linear-gradient(135deg, var(--color-primary), #a855f7);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.brand .version {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  background: rgba(0, 0, 0, 0.04);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
+  color: var(--text-primary);
 }
 
 .repo-badge {

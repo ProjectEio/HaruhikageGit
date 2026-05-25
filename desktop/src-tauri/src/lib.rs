@@ -231,6 +231,30 @@ fn git_discard_changes() -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn get_file_diff(path: String) -> Result<String, String> {
+    let out = Command::new("git")
+        .args(&["diff", "HEAD", "--", &path])
+        .output()
+        .map_err(|e| e.to_string())?;
+    let diff = String::from_utf8_lossy(&out.stdout).to_string();
+    if !diff.is_empty() {
+        Ok(diff)
+    } else {
+        let p = std::path::Path::new(&path);
+        if p.exists() && p.is_file() {
+            let content = std::fs::read_to_string(p).unwrap_or_else(|_| "无法读取该文件内容".to_string());
+            let mut diff_mock = format!("--- /dev/null\n+++ b/{}\n@@ -0,0 +1,{} @@\n", path, content.lines().count());
+            for line in content.lines() {
+                diff_mock.push_str(&format!("+{}\n", line));
+            }
+            Ok(diff_mock)
+        } else {
+            Ok("文件为空，不存在，或已被删除".to_string())
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -265,7 +289,8 @@ pub fn run() {
             open_in_explorer,
             open_in_vscode,
             get_remote_url,
-            git_discard_changes
+            git_discard_changes,
+            get_file_diff
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

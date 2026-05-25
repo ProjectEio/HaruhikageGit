@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { GitFileStatus, StatusInfo, CommitInfo } from "../types";
-import { invoke } from "@tauri-apps/api/core";
 
 interface WorkspacePanelProps {
   status: StatusInfo | null;
@@ -16,7 +15,8 @@ interface WorkspacePanelProps {
   onGitCommit: () => void;
   commits: CommitInfo[];
   onCopyHash: (hash: string) => void;
-  onUndoAll: () => void; // Triggered when clicking Discard/Undo all changes
+  onUndoAll: () => void;
+  onSelectFileForPreview: (path: string) => void; // Added callback when clicking on a changed file
 }
 
 export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
@@ -34,11 +34,11 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
   commits,
   onCopyHash,
   onUndoAll,
+  onSelectFileForPreview,
 }) => {
   const hasChanges = gitStatus.length > 0;
   const [activeTab, setActiveTab] = useState<"changes" | "history">("history");
 
-  // Keep active tab as "changes" if changes suddenly appear, or reset to "history" if no changes
   useEffect(() => {
     if (hasChanges) {
       setActiveTab("changes");
@@ -59,7 +59,7 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
         
         {/* Tab switchers: Only visible when there are uncommitted changes */}
         {hasChanges && (
-          <div className="tab-switcher" style={{ display: "flex", background: "rgba(0,0,0,0.2)", borderRadius: "6px", padding: "2px" }}>
+          <div className="tab-switcher" style={{ display: "flex", background: "#f1f5f9", borderRadius: "6px", padding: "2px", border: "1px solid var(--border-color)" }}>
             <button
               className={`tab-btn ${activeTab === "changes" ? "active" : ""}`}
               onClick={() => setActiveTab("changes")}
@@ -93,7 +93,12 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
                 const isStaged = f.status === "staged";
                 return (
                   <div className="file-item" key={f.path}>
-                    <span className="file-path" title={f.path}>
+                    <span
+                      className="file-path"
+                      title="点击查看详细变更差异"
+                      onClick={() => onSelectFileForPreview(f.path)}
+                      style={{ cursor: "pointer", textDecoration: "underline", color: "var(--color-primary)" }}
+                    >
                       {f.path}
                     </span>
                     <span className={`file-status-badge ${f.status}`}>{f.status}</span>
@@ -124,7 +129,7 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
             <button
               className="btn btn-sm btn-secondary btn-delete"
               onClick={onUndoAll}
-              title="放弃当前所有未提交的变动并还原代码 (Git Reset Hard)"
+              title="放弃当前所有未提交的变动并还原代码"
               style={{
                 background: "rgba(239, 68, 68, 0.1)",
                 color: "var(--color-danger)",
