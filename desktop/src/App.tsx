@@ -4,7 +4,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 // --- Components & Types ---
 import { StatusInfo, GitFileStatus, CommitInfo, DeviceCode, ProxySettings, Notification, ManagedRepository } from "./types";
-import { IdentityPanel } from "./components/IdentityPanel";
 import { ProfilesPanel } from "./components/ProfilesPanel";
 import { WorkspacePanel } from "./components/WorkspacePanel";
 import { RepoSidebar } from "./components/RepoSidebar";
@@ -55,7 +54,6 @@ function App() {
   // Commit Form States
   const [commitMsg, setCommitMsg] = useState("");
   const [commitStageAll, setCommitStageAll] = useState(false);
-  const [commitProfile, setCommitProfile] = useState("");
 
   const githubPollingRef = useRef<number | null>(null);
 
@@ -441,7 +439,7 @@ function App() {
       await invoke("git_commit", {
         message: commitMsg.trim(),
         all: commitStageAll,
-        profile: commitProfile || null,
+        profile: null,
       });
       showNotif("Git Commit 提交成功！", "success");
       setCommitMsg("");
@@ -505,8 +503,8 @@ function App() {
 
       {/* Main Workspace Three-Column Layout */}
       <div className="main-layout" style={{ flex: 1, overflow: "hidden", display: "flex", gap: "16px", padding: "16px" }}>
-        {/* Left Side: RepoSwitcher & Identity */}
-        <aside className="sidebar-left" style={{ width: "290px", display: "flex", flexDirection: "column", gap: "16px", flexShrink: 0, position: "relative" }}>
+        {/* Left Side: RepoSwitcher & WorkspacePanel (Enlarged control tower) */}
+        <aside className="sidebar-left" style={{ width: "310px", display: "flex", flexDirection: "column", gap: "16px", flexShrink: 0, position: "relative", height: "100%" }}>
           <RepoSidebar
             repos={repos}
             activePath={activeRepoPath}
@@ -514,11 +512,6 @@ function App() {
             onAddRepo={handleAddRepo}
             onRemoveRepo={handleRemoveRepo}
           />
-          <IdentityPanel status={status} />
-        </aside>
-
-        {/* Center: Stage List, Commit Tab & Commit History (Combined) */}
-        <main className="workspace-center" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <WorkspacePanel
             status={status}
             gitStatus={gitStatus}
@@ -526,8 +519,6 @@ function App() {
             setCommitMsg={setCommitMsg}
             commitStageAll={commitStageAll}
             setCommitStageAll={setCommitStageAll}
-            commitProfile={commitProfile}
-            setCommitProfile={setCommitProfile}
             onStageFile={handleStageFile}
             onStageAll={handleStageAll}
             onGitCommit={handleGitCommit}
@@ -535,40 +526,54 @@ function App() {
             onCopyHash={handleCopyHash}
             onUndoAll={handleUndoAll}
             onSelectFileForPreview={(path) => setSelectedPreviewPath(path)} // Toggle preview
+            onSwitchProfile={handleSwitchProfile}
           />
-        </main>
+        </aside>
 
-        {/* Right Side: Quick Actions Panel & Accounts Profiles Panel OR Full Diff Preview */}
-        <aside className="sidebar-right" style={{ width: "310px", display: "flex", flexDirection: "column", gap: "16px", flexShrink: 0, height: "100%", overflow: "hidden" }}>
+        {/* Center: Enormous Diff Preview Panel or ACG Welcome Board */}
+        <main className="workspace-center" style={{ flex: 1.8, display: "flex", flexDirection: "column", overflow: "hidden", height: "100%" }}>
           {selectedPreviewPath ? (
             <FilePreviewPanel
               filePath={selectedPreviewPath}
               onClose={() => setSelectedPreviewPath(null)}
             />
           ) : (
-            <>
-              <QuickActionsPanel activePath={activeRepoPath} showNotif={showNotif} />
-              
-              <ProfilesPanel
-                status={status}
-                onSwitchProfile={handleSwitchProfile}
-                onDeleteProfile={handleDeleteProfile}
-                onOpenAddModal={() => {
-                  setNewAlias("");
-                  setNewName("");
-                  setNewEmail("");
-                  setNewGpg("");
-                  setActiveModal("add");
-                }}
-                onOpenGithubModal={() => {
-                  setGithubAlias("github");
-                  setGithubPat("");
-                  setGithubDevice(null);
-                  setActiveModal("github");
-                }}
-              />
-            </>
+            <div className="section-card" style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "20px", background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "40px", textAlign: "center" }}>
+              <div style={{ fontSize: "4.5rem", animation: "float 4s ease-in-out infinite" }}>🌸</div>
+              <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: "1.4rem", fontWeight: "700", color: "var(--text-primary)" }}>HaruhikageGit 极简工作区</h2>
+              <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", maxWidth: "340px", lineHeight: "1.6" }}>
+                请点击左侧列表中的修改文件，本大视窗栏目将直接为您渲染高清、极速的单栏 diff 差异对比预览。
+              </p>
+              <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                <span style={{ fontSize: "0.7rem", background: "rgba(236, 72, 153, 0.08)", color: "var(--color-primary)", padding: "4px 10px", borderRadius: "12px", fontWeight: "600" }}>极速 Git 管理</span>
+                <span style={{ fontSize: "0.7rem", background: "rgba(16, 185, 129, 0.08)", color: "var(--color-success-hover)", padding: "4px 10px", borderRadius: "12px", fontWeight: "600" }}>ACG 樱花风</span>
+              </div>
+            </div>
           )}
+        </main>
+
+        {/* Right Side: Quick Actions Panel & Accounts Profiles Panel (Expanded & Always Visible) */}
+        <aside className="sidebar-right" style={{ width: "330px", display: "flex", flexDirection: "column", gap: "16px", flexShrink: 0, height: "100%", overflow: "hidden" }}>
+          <QuickActionsPanel activePath={activeRepoPath} showNotif={showNotif} />
+          
+          <ProfilesPanel
+            status={status}
+            onSwitchProfile={handleSwitchProfile}
+            onDeleteProfile={handleDeleteProfile}
+            onOpenAddModal={() => {
+              setNewAlias("");
+              setNewName("");
+              setNewEmail("");
+              setNewGpg("");
+              setActiveModal("add");
+            }}
+            onOpenGithubModal={() => {
+              setGithubAlias("github");
+              setGithubPat("");
+              setGithubDevice(null);
+              setActiveModal("github");
+            }}
+          />
         </aside>
       </div>
 

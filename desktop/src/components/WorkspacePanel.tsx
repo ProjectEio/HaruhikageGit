@@ -8,15 +8,14 @@ interface WorkspacePanelProps {
   setCommitMsg: (val: string) => void;
   commitStageAll: boolean;
   setCommitStageAll: (val: boolean) => void;
-  commitProfile: string;
-  setCommitProfile: (val: string) => void;
   onStageFile: (path: string, staged: boolean) => void;
   onStageAll: () => void;
   onGitCommit: () => void;
   commits: CommitInfo[];
   onCopyHash: (hash: string) => void;
   onUndoAll: () => void;
-  onSelectFileForPreview: (path: string) => void; // Added callback when clicking on a changed file
+  onSelectFileForPreview: (path: string) => void;
+  onSwitchProfile: (alias: string, global: boolean) => Promise<void>;
 }
 
 export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
@@ -26,8 +25,6 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
   setCommitMsg,
   commitStageAll,
   setCommitStageAll,
-  commitProfile,
-  setCommitProfile,
   onStageFile,
   onStageAll,
   onGitCommit,
@@ -35,11 +32,35 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
   onCopyHash,
   onUndoAll,
   onSelectFileForPreview,
+  onSwitchProfile,
 }) => {
   const hasChanges = gitStatus.length > 0;
   const [activeTab, setActiveTab] = useState<"changes" | "history">("changes");
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   const hasUnstaged = gitStatus.some((f) => f.status !== "staged");
+
+  const activeIdentityName = status?.local_name || status?.global_name || "Guest";
+  const activeIdentityEmail = status?.local_email || status?.global_email || "guest@haruhikage.git";
+
+  const getAvatarInitials = (name: string) => {
+    if (!name) return "?";
+    return name.trim().charAt(0).toUpperCase();
+  };
+
+  const getAvatarGradient = (name: string) => {
+    if (!name || name === "Guest") return "linear-gradient(135deg, #94a3b8, #64748b)";
+    const charCode = name.charCodeAt(0) || 0;
+    const gradients = [
+      "linear-gradient(135deg, #ec4899, #db2777)", // Sakura Pink
+      "linear-gradient(135deg, #3b82f6, #1d4ed8)", // Premium Blue
+      "linear-gradient(135deg, #10b981, #047857)", // Emerald Green
+      "linear-gradient(135deg, #f59e0b, #d97706)", // Amber
+      "linear-gradient(135deg, #8b5cf6, #6d28d9)", // Purple
+      "linear-gradient(135deg, #06b6d4, #0891b2)", // Cyan
+    ];
+    return gradients[charCode % gradients.length];
+  };
 
   return (
     <div className="section-card workspace-panel" style={{ flex: 1, display: "flex", flexDirection: "column", gap: "14px" }}>
@@ -132,35 +153,139 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
           </div>
 
           {/* Commit Form */}
-          <div className="commit-form" style={{ marginTop: "6px" }}>
-            <div className="form-row">
-              <label htmlFor="commit-msg-textarea">提交说明 (Commit Message):</label>
-              <textarea
-                id="commit-msg-textarea"
-                value={commitMsg}
-                onChange={(e) => setCommitMsg(e.target.value)}
-                placeholder="输入本次提交的简要说明..."
-                rows={2}
-              />
+          <div className="commit-form" style={{ marginTop: "6px", position: "relative" }}>
+            <div className="form-row" style={{ position: "relative" }}>
+              <label htmlFor="commit-msg-textarea" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>提交说明 (Commit Message):</span>
+                <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", cursor: "default" }}>
+                  当前身份: {activeIdentityName}
+                </span>
+              </label>
+              
+              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start", marginTop: "4px" }}>
+                {/* Circular Profile Avatar */}
+                <div style={{ position: "relative" }}>
+                  <div
+                    onClick={() => setShowProfileMenu(!showProfileMenu)}
+                    title={`当前 Git 身份: ${activeIdentityName} <${activeIdentityEmail}> \n点击快速切换身份`}
+                    style={{
+                      width: "38px",
+                      height: "38px",
+                      borderRadius: "50%",
+                      background: getAvatarGradient(activeIdentityName),
+                      color: "#ffffff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "0.95rem",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
+                      border: "2px solid #ffffff",
+                      transition: "transform 0.15s, box-shadow 0.15s",
+                      flexShrink: 0,
+                      userSelect: "none"
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = "scale(1.06)";
+                      e.currentTarget.style.boxShadow = "0 3px 10px rgba(236, 72, 153, 0.25)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = "scale(1)";
+                      e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.1)";
+                    }}
+                  >
+                    {getAvatarInitials(activeIdentityName)}
+                  </div>
+
+                  {/* Profile quick selection dropdown menu (renders above the avatar) */}
+                  {showProfileMenu && (
+                    <div
+                      className="profile-quick-menu"
+                      style={{
+                        position: "absolute",
+                        bottom: "44px", // above the avatar
+                        left: "0",
+                        background: "#ffffff",
+                        border: "1px solid var(--border-color)",
+                        borderRadius: "var(--radius-md)",
+                        boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+                        padding: "6px",
+                        zIndex: 1000,
+                        width: "210px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "2px",
+                        animation: "modalIn 0.15s cubic-bezier(0.16, 1, 0.3, 1)"
+                      }}
+                    >
+                      <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", fontWeight: "700", padding: "4px 6px 6px 6px", borderBottom: "1px solid rgba(0,0,0,0.05)", textAlign: "left" }}>
+                        切换当前项目 Git 身份
+                      </div>
+                      <div style={{ maxHeight: "150px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "2px", marginTop: "4px" }}>
+                        {status?.profiles.length === 0 ? (
+                          <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", padding: "10px", textAlign: "center" }}>
+                            暂无其他身份配置
+                          </div>
+                        ) : (
+                          status?.profiles.map(([alias, p]) => {
+                            const isActive = status.local_name === p.name && status.local_email === p.email;
+                            return (
+                              <div
+                                key={alias}
+                                onClick={() => {
+                                  onSwitchProfile(alias, false);
+                                  setShowProfileMenu(false);
+                                }}
+                                style={{
+                                  padding: "6px 8px",
+                                  borderRadius: "4px",
+                                  cursor: "pointer",
+                                  fontSize: "0.75rem",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  background: isActive ? "rgba(236, 72, 153, 0.05)" : "transparent",
+                                  color: isActive ? "var(--color-primary)" : "var(--text-primary)",
+                                  fontWeight: isActive ? "600" : "500",
+                                  transition: "all 0.12s",
+                                  textAlign: "left"
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!isActive) e.currentTarget.style.background = "#f1f5f9";
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!isActive) e.currentTarget.style.background = "transparent";
+                                }}
+                              >
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{alias}</span>
+                                  {isActive && <span style={{ fontSize: "0.7rem" }}>✓</span>}
+                                </div>
+                                <div style={{ fontSize: "0.6rem", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {p.name} <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.55rem" }}>&lt;{p.email}&gt;</span>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <textarea
+                  id="commit-msg-textarea"
+                  value={commitMsg}
+                  onChange={(e) => setCommitMsg(e.target.value)}
+                  placeholder="输入本次提交的简要说明..."
+                  rows={2}
+                  style={{ flex: 1, resize: "none" }}
+                />
+              </div>
             </div>
 
-            <div className="form-row inline-row">
-              <div className="profile-select-wrapper">
-                <label htmlFor="commit-profile-select">切换提交账户 (可选 Override):</label>
-                <select
-                  id="commit-profile-select"
-                  value={commitProfile}
-                  onChange={(e) => setCommitProfile(e.target.value)}
-                >
-                  <option value="">默认当前仓库身份 (Default)</option>
-                  {status?.profiles.map(([alias, p]) => (
-                    <option value={alias} key={alias}>
-                      {alias} ({p.name})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="checkbox-wrapper">
+            <div className="form-row inline-row" style={{ marginTop: "8px", display: "flex", justifyContent: "flex-end" }}>
+              <div className="checkbox-wrapper" style={{ paddingTop: "0" }}>
                 <input
                   type="checkbox"
                   id="stage-all-checkbox"
@@ -173,8 +298,8 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
               </div>
             </div>
 
-            <div className="form-actions">
-              <button className="btn btn-success btn-large" onClick={onGitCommit} style={{ width: "100%" }}>
+            <div className="form-actions" style={{ marginTop: "10px" }}>
+              <button className="btn btn-success btn-large" onClick={onGitCommit} style={{ width: "100%", padding: "10px 0" }}>
                 快速提交 Commit
               </button>
             </div>
