@@ -8,7 +8,7 @@ interface IdentityPanelProps {
 export const IdentityPanel: React.FC<IdentityPanelProps> = ({ status }) => {
   return (
     <div className="section-card identity-panel">
-      <h3 className="section-title">👤 当前身份</h3>
+      <h3 className="section-title">当前身份</h3>
       <div className="identity-group">
         <div className="identity-subcard global">
           <span className="scope-tag global-tag">全局 Global</span>

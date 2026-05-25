@@ -14,10 +14,10 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
 }) => {
   return (
     <div className="section-card history-panel">
-      <h3 className="section-title">⏳ 提交历史日志 (Git Log)</h3>
+      <h3 className="section-title">提交历史日志</h3>
       <div className="timeline">
         {!status || !status.is_repo ? (
-          <div className="empty-placeholder">暂无历史提交日志 ⏳</div>
+          <div className="empty-placeholder">暂无历史提交日志</div>
         ) : commits.length === 0 ? (
           <div className="empty-placeholder">暂无提交记录</div>
         ) : (

@@ -41,11 +41,11 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
       {/* Staging Changed Files Panel */}
       <div className="section-card stage-panel">
         <div className="section-header">
-          <h3 className="section-title">📂 工作区变更</h3>
+          <h3 className="section-title">工作区变更</h3>
           {gitStatus.length > 0 && hasUnstaged && (
             <div className="header-btns">
               <button className="btn btn-sm btn-success" onClick={onStageAll}>
-                暂存所有 📥
+                暂存所有
               </button>
             </div>
           )}
@@ -59,9 +59,9 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
           </div>
           <div className="files-list">
             {!status || !status.is_repo ? (
-              <div className="empty-placeholder">未在 Git 仓库内，暂无工作区变更 🚫</div>
+              <div className="empty-placeholder">未在 Git 仓库内，暂无工作区变更</div>
             ) : gitStatus.length === 0 ? (
-              <div className="empty-placeholder">暂无工作区变更，代码很干净 ✨</div>
+              <div className="empty-placeholder">暂无工作区变更，当前工作区很干净</div>
             ) : (
               gitStatus.map((f) => {
                 const isStaged = f.status === "staged";
@@ -75,7 +75,7 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
                       className={`file-action-btn ${isStaged ? "unstage" : "stage"}`}
                       onClick={() => onStageFile(f.path, isStaged)}
                     >
-                      {isStaged ? "取消暂存 ↩" : "暂存文件 📥"}
+                      {isStaged ? "取消暂存" : "暂存文件"}
                     </button>
                   </div>
                 );
@@ -88,16 +88,16 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
       {/* Sync and Commit Actions Panel */}
       {status?.is_repo && (
         <div className="section-card commit-panel">
-          <h3 className="section-title">📝 快速同步与提交</h3>
+          <h3 className="section-title">快速同步与提交</h3>
           <div className="sync-actions-row">
             <button className="btn btn-secondary" onClick={onGitFetch}>
-              🔄 Fetch 抓取
+              Fetch 抓取
             </button>
             <button className="btn btn-secondary" onClick={onGitPull}>
-              ⬇️ Pull 拉取
+              Pull 拉取
             </button>
             <button className="btn btn-primary" onClick={onGitPush}>
-              ⬆️ Push 推送至 Origin
+              Push 推送至 Origin
             </button>
           </div>
 
@@ -144,7 +144,7 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
 
             <div className="form-actions">
               <button className="btn btn-success btn-large" onClick={onGitCommit}>
-                ✨ 快速提交 Commit
+                快速提交 Commit
               </button>
             </div>
           </div>

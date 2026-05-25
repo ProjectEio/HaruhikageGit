@@ -21,10 +21,10 @@ export const BranchPanel: React.FC<BranchPanelProps> = ({
   return (
     <div className="section-card branch-panel">
       <div className="section-header">
-        <h3 className="section-title">🌿 分支管理</h3>
+        <h3 className="section-title">分支管理</h3>
         {status?.is_repo && (
           <button className="btn btn-sm btn-primary" onClick={onCreateBranch}>
-            ＋ 新建
+            + 新建
           </button>
         )}
       </div>
@@ -52,14 +52,14 @@ export const BranchPanel: React.FC<BranchPanelProps> = ({
       <div className="branches-list-wrapper">
         <div className="branches-list">
           {!status || !status.is_repo ? (
-            <div className="empty-placeholder">请在 Git 仓库下启动程序 🌿</div>
+            <div className="empty-placeholder">请在 Git 仓库下启动程序</div>
           ) : (
             branches.map((b) => {
               const isActive = b === currentBranch;
               return (
                 <div className={`branch-item ${isActive ? "active" : ""}`} key={b}>
                   <span className="branch-item-name">
-                    {isActive ? "🌸 " : "🌿 "}
+                    {isActive && "● "}
                     {b}
                   </span>
                   <div className="branch-item-actions">
@@ -70,7 +70,7 @@ export const BranchPanel: React.FC<BranchPanelProps> = ({
                     )}
                     {!isActive && (
                       <button onClick={() => onDeleteBranch(b)} title="删除分支">
-                        🗑️
+                        删除
                       </button>
                     )}
                   </div>

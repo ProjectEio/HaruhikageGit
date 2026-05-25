@@ -125,7 +125,7 @@ function App() {
         if (githubPollingRef.current) clearInterval(githubPollingRef.current);
         setGithubDevice(null);
         setGithubPollingMsg("验证超时，请重试");
-        showNotif("GitHub 授权轮询已超时 ⏳", "danger");
+        showNotif("GitHub 授权轮询已超时", "danger");
         return;
       }
 
@@ -142,7 +142,7 @@ function App() {
         if (githubPollingRef.current) clearInterval(githubPollingRef.current);
         setGithubDevice(null);
         setActiveModal(null);
-        showNotif(`GitHub 一键登录成功！别名 '${githubAlias}' 已创建 ✔`, "success");
+        showNotif(`GitHub 一键登录成功！别名 '${githubAlias}' 已创建`, "success");
         reloadData();
       } catch (err: any) {
         if (err.includes("authorization_pending")) {
@@ -168,7 +168,7 @@ function App() {
   const handleSwitchProfile = async (alias: string, global: boolean) => {
     try {
       await invoke("switch_profile", { alias, global });
-      showNotif(`已应用别名 '${alias}' 到${global ? "全局" : "当前项目"} ✔`, "success");
+      showNotif(`已应用别名 '${alias}' 到${global ? "全局" : "当前项目"}`, "success");
       reloadData();
     } catch (err) {
       showNotif("应用 Profile 失败: " + err, "danger");
@@ -204,7 +204,7 @@ function App() {
     try {
       await invoke("set_proxy_auto_detect", { enabled: proxyAuto });
       await invoke("set_proxy_url", { url: proxyUrl.trim() || null });
-      showNotif("网络代理设置保存成功 ✔", "success");
+      showNotif("网络代理设置保存成功", "success");
       setActiveModal(null);
       reloadData();
     } catch (err) {
@@ -215,7 +215,7 @@ function App() {
   const handleAddProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAlias.trim() || !newName.trim() || !newEmail.trim()) {
-      showNotif("必须填写别名、姓名和邮箱 ⚠️", "danger");
+      showNotif("必须填写别名、姓名和邮箱", "danger");
       return;
     }
     try {
@@ -254,7 +254,7 @@ function App() {
     try {
       showNotif("正在使用 PAT 登录 GitHub...", "info");
       await invoke("github_pat_login", { token: githubPat.trim(), alias: githubAlias.trim() });
-      showNotif(`GitHub 登录成功！Profile '${githubAlias}' 已创建 ✔`, "success");
+      showNotif(`GitHub 登录成功！Profile '${githubAlias}' 已创建`, "success");
       setActiveModal(null);
       reloadData();
     } catch (err) {
@@ -309,7 +309,7 @@ function App() {
   const handleStageAll = async () => {
     try {
       await invoke("git_stage_files", { specs: ["."] });
-      showNotif("已暂存工作区当前所有变更 📥", "success");
+      showNotif("已暂存工作区当前所有变更", "success");
       reloadData();
     } catch (err) {
       showNotif("暂存失败: " + err, "danger");
@@ -346,7 +346,7 @@ function App() {
     try {
       showNotif("正在拉取远程变更并合并 (Git Pull)...", "info");
       const out: string = await invoke("git_pull", { alias: null, global: false });
-      showNotif(out || "Pull 合并成功，工作区已与远程对齐 ✨", "success");
+      showNotif("Pull 合并成功，工作区已与远程对齐", "success");
       reloadData();
     } catch (err) {
       showNotif("Pull 失败: " + err, "danger");
@@ -357,7 +357,7 @@ function App() {
     try {
       showNotif("正在推送本地提交至远程 (Git Push)...", "info");
       const out: string = await invoke("git_push");
-      showNotif(out || "Push 成功！远程仓库已同步 🚀", "success");
+      showNotif("Push 成功！远程仓库已同步", "success");
       reloadData();
     } catch (err) {
       showNotif("Push 失败: " + err, "danger");
@@ -366,7 +366,7 @@ function App() {
 
   const handleGitCommit = async () => {
     if (!commitMsg.trim()) {
-      showNotif("提交信息 (Commit Message) 不能为空 ⚠️", "danger");
+      showNotif("提交信息 (Commit Message) 不能为空", "danger");
       return;
     }
     try {
@@ -376,7 +376,7 @@ function App() {
         all: commitStageAll,
         profile: commitProfile || null,
       });
-      showNotif("✨ Git Commit 提交成功！", "success");
+      showNotif("Git Commit 提交成功！", "success");
       setCommitMsg("");
       reloadData();
     } catch (err) {
@@ -386,7 +386,17 @@ function App() {
 
   const handleCopyHash = (hash: string) => {
     navigator.clipboard.writeText(hash);
-    showNotif("提交 Hash 已复制到剪贴板 📋", "success");
+    showNotif("提交 Hash 已复制到剪贴板", "success");
+  };
+
+  const handleHeaderMouseDown = async (e: React.MouseEvent) => {
+    if (e.button === 0 && !(e.target as HTMLElement).closest("button, select, input, a")) {
+      try {
+        await appWindow.startDragging();
+      } catch (err) {
+        console.error("Failed to start dragging:", err);
+      }
+    }
   };
 
   const handleMinimize = async () => {
@@ -408,9 +418,9 @@ function App() {
   return (
     <div className="app-container">
       {/* Top Titlebar */}
-      <header className="app-header" data-tauri-drag-region>
+      <header className="app-header" data-tauri-drag-region onMouseDown={handleHeaderMouseDown}>
         <div className="brand" data-tauri-drag-region>
-          <span className="logo" data-tauri-drag-region>🌸</span>
+          <span className="logo" data-tauri-drag-region>HG</span>
           <span className="title" data-tauri-drag-region>HaruhikageGit</span>
           <span className="version" data-tauri-drag-region>v0.1.0</span>
         </div>
@@ -420,13 +430,13 @@ function App() {
         </div>
         <div className="header-actions">
           <button className="icon-btn" onClick={handleOpenProxy} title="代理设置">
-            🌐 代理
+            代理
           </button>
           <button className="icon-btn win-ctrl-btn" onClick={handleMinimize} title="最小化" style={{ minWidth: "32px", padding: "6px 0", justifyContent: "center" }}>
-            ➖
+            -
           </button>
           <button className="icon-btn win-ctrl-btn close-btn-win" onClick={handleClose} title="关闭" style={{ minWidth: "32px", padding: "6px 0", justifyContent: "center" }}>
-            ❌
+            ✕
           </button>
         </div>
       </header>
@@ -542,13 +552,13 @@ function App() {
       <div style={{ position: "fixed", bottom: "20px", right: "20px", zIndex: 9999, display: "flex", flexDirection: "column", gap: "10px" }}>
         {notifications.map((n) => {
           let bg = "linear-gradient(135deg, #3b82f6, #2563eb)";
-          let prefix = "ℹ️ ";
+          let prefix = "";
           if (n.type === "success") {
             bg = "linear-gradient(135deg, #10b981, #059669)";
-            prefix = "✨ ";
+            prefix = "";
           } else if (n.type === "danger") {
             bg = "linear-gradient(135deg, #ef4444, #dc2626)";
-            prefix = "❌ ";
+            prefix = "";
           }
 
           return (

@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "HaruhikageGit Desktop",
         "width": 1120,
         "height": 720,

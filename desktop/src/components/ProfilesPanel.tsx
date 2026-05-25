@@ -19,13 +19,13 @@ export const ProfilesPanel: React.FC<ProfilesPanelProps> = ({
   return (
     <div className="section-card profiles-panel">
       <div className="section-header">
-        <h3 className="section-title">📂 Profiles 别名</h3>
+        <h3 className="section-title">Profiles 别名</h3>
         <div className="header-btns">
           <button className="btn btn-sm btn-primary" onClick={onOpenAddModal} title="添加新 Profile">
-            ＋ 添加
+            + 添加
           </button>
           <button className="btn btn-sm btn-github" onClick={onOpenGithubModal} title="一键 GitHub OAuth 登录">
-            🌸 GH登录
+            GH 登录
           </button>
         </div>
       </div>
@@ -52,13 +52,13 @@ export const ProfilesPanel: React.FC<ProfilesPanelProps> = ({
                 <div className="profile-item-details">
                   <div className="profile-alias-row">
                     <span className="profile-item-alias">{alias}</span>
-                    {p.signing_key && <span className="profile-item-gpg">🔑 GPG</span>}
+                    {p.signing_key && <span className="profile-item-gpg">GPG</span>}
                     {p.github_user && (
                       <span
                         className="profile-item-gpg"
                         style={{ background: "rgba(16,185,129,0.1)", color: "var(--color-success-hover)" }}
                       >
-                        🌸 GH: {p.github_user}
+                        GH: {p.github_user}
                       </span>
                     )}
                   </div>
@@ -67,17 +67,17 @@ export const ProfilesPanel: React.FC<ProfilesPanelProps> = ({
                 </div>
                 <div className="profile-item-actions">
                   <button onClick={() => onSwitchProfile(alias, false)} title="应用到当前仓库">
-                    🏠 本地
+                    本地
                   </button>
                   <button onClick={() => onSwitchProfile(alias, true)} title="应用到全局 config">
-                    🌐 全局
+                    全局
                   </button>
                   <button
                     className="btn-delete"
                     onClick={() => onDeleteProfile(alias)}
                     title="删除 Profile"
                   >
-                    🗑️
+                    删除
                   </button>
                 </div>
               </div>

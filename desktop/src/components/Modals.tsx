@@ -37,7 +37,7 @@ export const AddProfileModal: React.FC<AddProfileModalProps> = ({
     <div className="modal-overlay">
       <div className="modal-card">
         <div className="modal-header">
-          <h3>📂 添加新 Profile</h3>
+          <h3>添加新 Profile</h3>
           <button className="close-btn" onClick={onClose}>
             ×
           </button>
@@ -136,7 +136,7 @@ export const GithubLoginModal: React.FC<GithubLoginModalProps> = ({
     <div className="modal-overlay">
       <div className="modal-card">
         <div className="modal-header">
-          <h3>🌸 GitHub OAuth 一键授权登录</h3>
+          <h3>GitHub 一键授权登录</h3>
           <button className="close-btn" onClick={onClose}>
             ×
           </button>
@@ -159,7 +159,7 @@ export const GithubLoginModal: React.FC<GithubLoginModalProps> = ({
                 onClick={onRequestCode}
                 style={{ width: "100%", marginTop: "14px" }}
               >
-                🚀 开始请求验证码
+                开始请求验证码
               </button>
 
               <div className="divider">或者使用 Personal Access Token (PAT) 登录</div>
@@ -179,7 +179,7 @@ export const GithubLoginModal: React.FC<GithubLoginModalProps> = ({
                 onClick={onPatSubmit}
                 style={{ width: "100%", marginTop: "14px" }}
               >
-                🔑 用 PAT 登录
+                用 PAT 登录
               </button>
             </div>
           ) : (
@@ -187,7 +187,7 @@ export const GithubLoginModal: React.FC<GithubLoginModalProps> = ({
               <p className="auth-instruction">请使用浏览器访问以下授权地址：</p>
               <div className="auth-uri-box" style={{ margin: "14px 0" }}>
                 <a href={githubDevice.verification_uri} target="_blank" rel="noreferrer">
-                  点击打开 GitHub 授权页面 🔗
+                  点击打开 GitHub 授权页面
                 </a>
               </div>
               <p className="auth-instruction">并在页面中输入验证码：</p>
@@ -237,7 +237,7 @@ export const ProxyModal: React.FC<ProxyModalProps> = ({
     <div className="modal-overlay">
       <div className="modal-card">
         <div className="modal-header">
-          <h3>🌐 网络代理配置</h3>
+          <h3>网络代理配置</h3>
           <button className="close-btn" onClick={onClose}>
             ×
           </button>
