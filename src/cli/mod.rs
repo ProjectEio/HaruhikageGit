@@ -153,10 +153,18 @@ enum GithubCommands {
     },
     /// 配置 GitHub OAuth App 的 client_id（首次使用前需运行一次）
     SetClient {
-        /// GitHub OAuth App 的 client_id
+        /// GitHub OAuth App 的 client_id（必须是 OAuth App，不能是 GitHub App）
         client_id: String,
     },
-    /// 在 GitHub 创建仓库并配置本地 remote
+    /// 直接使用 Personal Access Token（PAT）登录
+    Pat {
+        /// GitHub PAT（https://github.com/settings/tokens/new?scopes=repo）
+        token: String,
+        /// 保存的 Profile 别名
+        #[arg(default_value = "github")]
+        alias: String,
+    },
+    /// 在 GitHub 创建仓库并配置本地 remote（需 OAuth App token 或 PAT + repo scope）
     Create {
         /// 仓库名称
         name: String,
@@ -209,6 +217,7 @@ pub fn run() -> Result<()> {
         Commands::Github(sub) => match sub {
             GithubCommands::Login { alias, global } => cmd_github_login(&alias, global)?,
             GithubCommands::SetClient { client_id } => cmd_github_set_client(&client_id)?,
+            GithubCommands::Pat { token, alias } => cmd_github_pat(&token, &alias)?,
             GithubCommands::Create { name, org, private, desc, profile } => {
                 cmd_github_create(&name, org.as_deref(), private, &desc, &profile)?
             }
@@ -477,7 +486,20 @@ fn cmd_publish() -> Result<()> {
     Ok(())
 }
 
-// ── Github Create ─────────────────────────────────────────────────────────────
+
+// ── Github PAT ──────────────────────────────────────────────────────
+
+fn cmd_github_pat(token: &str, alias: &str) -> Result<()> {
+    let profile = ops::github_pat_login(token, alias)?;
+    println!("{} PAT 登录成功！", "✔".green().bold());
+    println!("  GitHub 用户名: {}", profile.github_user.as_deref().unwrap_or("").cyan());
+    println!("  姓名:         {}", profile.name.green());
+    println!("  邮箱:         {}", profile.email.yellow());
+    println!("  Profile '{}' 已保存", alias.cyan());
+    Ok(())
+}
+
+// ── Github Create ─────────────────────────────────────────────────────
 
 fn cmd_github_create(
     name: &str,
@@ -488,8 +510,7 @@ fn cmd_github_create(
 ) -> Result<()> {
     let info = ops::github_create_repo(profile, name, org, desc, private)?;
     println!("{} GitHub 仓库已创建！", "✔".green().bold());
-    println!("  URL:       {}", info.html_url.cyan());
-    println!("  Clone URL: {}", info.clone_url.dimmed());
+    println!("  URL:  {}", info.html_url.cyan());
     println!("  已配置本地 remote origin → {}", info.clone_url.cyan());
     println!();
     println!("现在可以运行：{}", "gf publish".cyan().bold());

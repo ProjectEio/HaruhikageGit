@@ -177,6 +177,32 @@ pub fn github_complete_login(alias: &str, device: &github::DeviceCode) -> Result
     Ok(profile)
 }
 
+
+/// 用 PAT 直接登录：拉取用户信息并保存 Profile
+pub fn github_pat_login(token: &str, alias: &str) -> Result<Profile> {
+    let client = gh_client()?;
+    let user = client.get_user(token)?;
+    let email = match user.email.as_deref() {
+        Some(e) if !e.is_empty() => e.to_string(),
+        _ => client
+            .get_primary_email(token)?
+            .ok_or_else(|| anyhow::anyhow!("无法获取 GitHub 邮箱"))?,
+    };
+    let name = user.name.as_deref().unwrap_or(&user.login).to_string();
+    let mut cfg = Config::load()?;
+    let profile = Profile {
+        name,
+        email,
+        signing_key: None,
+        token: Some(token.to_string()),
+        github_user: Some(user.login.clone()),
+    };
+    cfg.profiles.insert(alias.to_string(), profile.clone());
+    cfg.save()?;
+    git::credential_approve("github.com", &user.login, token)?;
+    Ok(profile)
+}
+
 /// 创建 GitHub 仓库并配置本地 remote
 pub fn github_create_repo(
     profile_alias: &str,
@@ -202,14 +228,38 @@ pub fn github_create_repo(
     Ok(info)
 }
 
-/// 推送当前分支到 origin
+/// 推送当前分支到 origin，自动注入 GitHub token（绕过 credential.helper）
 pub fn git_push() -> Result<String> {
     if !git::is_git_repo() {
         bail!("当前目录不是 git 仓库");
     }
     let branch = git::current_branch()?;
-    git::push("origin", &branch, true)?;
+    let cfg = Config::load()?;
+    let proxy_url = proxy::resolve(&cfg.proxy);
+
+    // 尝试从 profiles 中找到含 token 的 GitHub profile，并把 token 注入 URL
+    let auth_url = git::get_remote_url("origin").ok().and_then(|url| {
+        cfg.profiles
+            .values()
+            .find(|p| p.token.is_some() && p.github_user.is_some())
+            .and_then(|p| inject_token(&url, p.github_user.as_deref()?, p.token.as_deref()?))
+    });
+
+    git::push("origin", &branch, true, proxy_url.as_deref(), auth_url.as_deref())?;
     Ok(branch)
+}
+
+fn inject_token(url: &str, username: &str, token: &str) -> Option<String> {
+    if let Some(rest) = url.trim().strip_prefix("https://") {
+        let host_path = if let Some(at) = rest.find('@') {
+            &rest[at + 1..]
+        } else {
+            rest
+        };
+        Some(format!("https://{}:{}@{}", username, token, host_path))
+    } else {
+        None
+    }
 }
 
 // ── 代理配置 ──────────────────────────────────────────────────────────────

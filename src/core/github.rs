@@ -8,7 +8,7 @@ use crate::core::config::ProxySettings;
 const DEVICE_CODE_URL: &str = "https://github.com/login/device/code";
 const TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
 const API_BASE: &str = "https://api.github.com";
-const SCOPES: &str = "read:user user:email repo";
+const SCOPES: &str = "repo read:user user:email admin:org";
 const UA: &str = concat!("HaruhikageGit/", env!("CARGO_PKG_VERSION"));
 
 // ── 类型定义 ──────────────────────────────────────────────────────────────────
@@ -171,9 +171,10 @@ impl Client {
             .map(|e| e.email))
     }
 
-    // ── 仓库管理 ───────────────────────────────────────────────────────────
+    // ── 仓库管理 ──────────────────────────────────────────────────
 
     /// 创建 GitHub 仓库（org 为 None 时创建在个人账户下）
+    /// 要求 token 来自 OAuth App（不能是 GitHub App）且包含 repo scope
     pub fn create_repo(
         &self,
         token: &str,
@@ -199,7 +200,17 @@ impl Client {
                 "private": private,
                 "auto_init": false,
             }))
-            .context("创建 GitHub 仓库失败（请确认 token 有 repo 权限）")?;
+            .map_err(|e| match e {
+                ureq::Error::Status(code, resp) => {
+                    let body = resp.into_string().unwrap_or_default();
+                    let msg = serde_json::from_str::<serde_json::Value>(&body)
+                        .ok()
+                        .and_then(|v| v["message"].as_str().map(|s| s.to_string()))
+                        .unwrap_or(body);
+                    anyhow::anyhow!("GitHub API {} 错误: {}", code, msg)
+                }
+                other => anyhow::anyhow!(other).context("创建仓库网络失败"),
+            })?;
 
         let json: serde_json::Value = resp.into_json().context("解析创建仓库响应失败")?;
         Ok(RepoInfo {

@@ -16,15 +16,25 @@ pub struct Profile {
     pub github_user: Option<String>,
 }
 
-/// 代理配置，默认关闭自动检测
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// 代理配置，默认开启自动检测
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProxySettings {
-    /// 是否自动检测系统代理（默认 false）
-    #[serde(default)]
+    /// 是否自动检测系统代理（默认 true）
+    #[serde(default = "default_true")]
     pub auto_detect: bool,
     /// 手动指定代理 URL，优先于自动检测
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl Default for ProxySettings {
+    fn default() -> Self {
+        Self { auto_detect: true, url: None }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]

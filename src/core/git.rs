@@ -84,23 +84,37 @@ pub fn add_remote(name: &str, url: &str) -> Result<()> {
     }
 }
 
-/// git push（-u origin <branch>），branch 默认用 HEAD
-pub fn push(remote: &str, branch: &str, set_upstream: bool) -> Result<()> {
+/// git push；auth_url 为含 token 的完整 URL，proxy_url 透传到 HTTPS_PROXY
+pub fn push(
+    remote: &str,
+    branch: &str,
+    set_upstream: bool,
+    proxy_url: Option<&str>,
+    auth_url: Option<&str>,
+) -> Result<()> {
     let mut args = vec!["push"];
     if set_upstream {
         args.push("-u");
     }
-    args.push(remote);
+    let target = auth_url.unwrap_or(remote);
+    args.push(target);
     args.push(branch);
-    let status = Command::new("git")
-        .args(&args)
-        .status()
-        .context("执行 git push 失败")?;
+    let mut cmd = Command::new("git");
+    cmd.args(&args);
+    if let Some(proxy) = proxy_url {
+        cmd.env("HTTPS_PROXY", proxy).env("HTTP_PROXY", proxy);
+    }
+    let status = cmd.status().context("执行 git push 失败")?;
     if status.success() {
         Ok(())
     } else {
-        bail!("git push 返回非零退出码")
+        bail!("git push 失败")
     }
+}
+
+/// 获取 remote 的 URL
+pub fn get_remote_url(remote: &str) -> Result<String> {
+    git_output(&["remote", "get-url", remote]).context("获取 remote URL 失败")
 }
 
 /// 获取当前分支名
