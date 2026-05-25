@@ -5,29 +5,29 @@
   --font-sans: 'Inter', 'Outfit', system-ui, -apple-system, sans-serif;
   --font-mono: 'Fira Code', monospace;
   
-  /* Color Palette (Deep Space Cyberpunk Theme) */
-  --bg-app: #080a11;
-  --bg-card: rgba(22, 28, 45, 0.45);
-  --bg-sidebar: rgba(13, 17, 28, 0.85);
-  --border-color: rgba(255, 255, 255, 0.06);
-  --border-active: rgba(59, 130, 246, 0.4);
+  /* Color Palette (Premium Whitish Sakura Theme) */
+  --bg-app: #f1f5f9;
+  --bg-card: #ffffff;
+  --bg-sidebar: #ffffff;
+  --border-color: rgba(0, 0, 0, 0.08);
+  --border-active: rgba(236, 72, 153, 0.4);
   
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
   
-  --color-primary: #3b82f6;
-  --color-primary-hover: #60a5fa;
+  --color-primary: #ec4899; /* Sakura Pink */
+  --color-primary-hover: #f472b6;
   --color-success: #10b981;
-  --color-success-hover: #34d399;
+  --color-success-hover: #059669;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
   --color-github: #24292f;
   
-  --shadow-lg: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
-  --shadow-glow: 0 0 15px rgba(59, 130, 246, 0.25);
-  --shadow-success-glow: 0 0 15px rgba(16, 185, 129, 0.25);
-  --radius-lg: 12px;
+  --shadow-lg: 0 4px 18px rgba(0, 0, 0, 0.04);
+  --shadow-glow: 0 0 12px rgba(236, 72, 153, 0.25);
+  --shadow-success-glow: 0 0 12px rgba(16, 185, 129, 0.15);
+  --radius-lg: 10px;
   --radius-md: 8px;
   --radius-sm: 6px;
   
@@ -43,7 +43,7 @@
 
 body {
   font-family: var(--font-sans);
-  background-color: transparent; /* Make body background transparent */
+  background-color: transparent;
   color: var(--text-primary);
   height: 100vh;
   overflow: hidden;
@@ -57,15 +57,14 @@ body {
   flex-direction: column;
   height: 100vh;
   width: 100vw;
-  background-color: rgba(8, 10, 17, 0.72); /* Glass background */
-  backdrop-filter: blur(28px) saturate(125%); /* Elegant blur */
-  border: 1px solid rgba(255, 255, 255, 0.08); /* Window borders */
+  background-color: #f8fafc; /* Solid whitish background */
+  border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
   background-image: 
-    radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.08) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
+    radial-gradient(at 0% 0%, rgba(236, 72, 153, 0.04) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(59, 130, 246, 0.02) 0px, transparent 50%);
 }
 
 .app-header {
@@ -75,9 +74,12 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  background-color: var(--bg-sidebar);
+  background-image: linear-gradient(rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.65)), url('/cherry_blossom_header.png');
+  background-size: cover;
+  background-position: center;
   border-bottom: 1px solid var(--border-color);
   backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   z-index: 10;
   user-select: none;
   -webkit-user-select: none;
@@ -98,7 +100,7 @@ body {
   font-weight: 700;
   font-family: 'Outfit', sans-serif;
   letter-spacing: 0.5px;
-  background: linear-gradient(135deg, #fff 30%, var(--color-primary-hover));
+  background: linear-gradient(135deg, var(--color-primary), #a855f7);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -106,7 +108,7 @@ body {
 .brand .version {
   font-size: 0.75rem;
   color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.04);
   padding: 2px 6px;
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
@@ -116,12 +118,13 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.7);
   padding: 6px 12px;
   border-radius: 20px;
   border: 1px solid var(--border-color);
   font-size: 0.8rem;
   font-weight: 500;
+  color: var(--text-primary);
 }
 
 .repo-badge .indicator {
@@ -214,18 +217,17 @@ body {
 .section-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: 16px;
-  backdrop-filter: blur(20px);
+  border-radius: var(--radius-md);
+  padding: 14px;
   box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  transition: border-color var(--transition-normal), transform var(--transition-normal);
+  gap: 10px;
+  transition: border-color var(--transition-normal);
 }
 
 .section-card:hover {
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(236, 72, 153, 0.2);
 }
 
 .section-header {
@@ -258,10 +260,10 @@ body {
 }
 
 .identity-subcard {
-  background: rgba(255, 255, 255, 0.02);
+  background: #f8fafc;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: 12px;
+  border-radius: var(--radius-sm);
+  padding: 10px;
   position: relative;
   overflow: hidden;
 }
@@ -292,7 +294,7 @@ body {
   margin-bottom: 6px;
 }
 
-.global-tag { color: var(--color-primary-hover); }
+.global-tag { color: var(--color-primary); }
 .local-tag { color: var(--color-success-hover); }
 
 .identity-subcard .info {
@@ -327,10 +329,10 @@ body {
 }
 
 .profile-item {
-  background: rgba(255, 255, 255, 0.01);
+  background: #f8fafc;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: 12px;
+  border-radius: var(--radius-sm);
+  padding: 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -340,14 +342,14 @@ body {
 }
 
 .profile-item:hover {
-  background: rgba(255, 255, 255, 0.03);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: #f1f5f9;
+  border-color: rgba(236, 72, 153, 0.15);
   transform: translateX(2px);
 }
 
 .profile-item.active {
   border-color: var(--color-primary);
-  background: rgba(59, 130, 246, 0.06);
+  background: rgba(236, 72, 153, 0.05);
   box-shadow: var(--shadow-glow);
 }
 
@@ -356,7 +358,7 @@ body {
   position: absolute;
   top: 8px;
   right: 12px;
-  color: var(--color-primary-hover);
+  color: var(--color-primary);
   font-weight: 700;
   font-size: 0.8rem;
 }
@@ -376,12 +378,12 @@ body {
 
 .profile-item-alias {
   font-weight: 600;
-  color: var(--color-primary-hover);
+  color: var(--color-primary);
   font-size: 0.85rem;
 }
 
 .profile-item-gpg {
-  background: rgba(245, 158, 11, 0.1);
+  background: rgba(245, 158, 11, 0.15);
   color: var(--color-warning);
   font-size: 0.65rem;
   font-weight: 600;
@@ -414,7 +416,7 @@ body {
 }
 
 .profile-item-actions button {
-  background: rgba(255, 255, 255, 0.04);
+  background: #ffffff;
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
   padding: 4px 6px;
@@ -425,14 +427,14 @@ body {
 }
 
 .profile-item-actions button:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: #f8fafc;
   color: var(--text-primary);
 }
 
 .profile-item-actions button.btn-delete:hover {
-  background: rgba(239, 68, 68, 0.15);
+  background: rgba(239, 68, 68, 0.1);
   color: var(--color-danger);
-  border-color: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.2);
 }
 
 /* Middle Content Area - Stage / Changed Files list */
@@ -445,16 +447,16 @@ body {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   overflow: hidden;
-  background: rgba(0, 0, 0, 0.15);
+  background: #f8fafc;
 }
 
 .file-list-header {
   display: grid;
   grid-template-columns: 1fr 100px 90px;
   padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.02);
+  background: #f1f5f9;
   border-bottom: 1px solid var(--border-color);
   font-size: 0.75rem;
   font-weight: 600;
@@ -474,7 +476,7 @@ body {
   grid-template-columns: 1fr 100px 90px;
   align-items: center;
   padding: 8px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
   font-size: 0.8rem;
   transition: background-color var(--transition-fast);
 }
@@ -484,7 +486,7 @@ body {
 }
 
 .file-item:hover {
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: #f1f5f9;
 }
 
 .file-path {
@@ -509,12 +511,12 @@ body {
 }
 
 .file-status-badge.modified {
-  background: rgba(245, 158, 11, 0.1);
+  background: rgba(245, 158, 11, 0.15);
   color: var(--color-warning);
 }
 
 .file-status-badge.untracked {
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(236, 72, 153, 0.08);
   color: var(--color-primary-hover);
 }
 
@@ -529,7 +531,7 @@ body {
 }
 
 .file-action-btn {
-  background: transparent;
+  background: #ffffff;
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
   padding: 3px 8px;
@@ -543,7 +545,7 @@ body {
 
 .file-action-btn:hover {
   border-color: var(--color-primary);
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(236, 72, 153, 0.05);
   color: var(--text-primary);
 }
 
@@ -588,9 +590,9 @@ body {
 }
 
 .form-row textarea, .form-group input, select {
-  background: rgba(0, 0, 0, 0.25);
+  background: #ffffff;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   padding: 10px 12px;
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -601,6 +603,7 @@ body {
 
 .form-row textarea:focus, .form-group input:focus, select:focus {
   border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.1);
 }
 
 .form-row.inline-row {
@@ -835,9 +838,9 @@ body {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--color-primary), #2563eb);
+  background: linear-gradient(135deg, var(--color-primary), #db2777);
   color: #fff;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.15);
 }
 
 .btn-primary:hover {
@@ -846,21 +849,21 @@ body {
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.03);
+  background: #ffffff;
   border-color: var(--border-color);
   color: var(--text-secondary);
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: #f8fafc;
+  border-color: rgba(0, 0, 0, 0.15);
   color: var(--text-primary);
 }
 
 .btn-success {
   background: linear-gradient(135deg, var(--color-success), #059669);
   color: #fff;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.1);
 }
 
 .btn-success:hover {
@@ -879,7 +882,7 @@ body {
 }
 
 .icon-btn {
-  background: rgba(255, 255, 255, 0.03);
+  background: #ffffff;
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
   border-radius: var(--radius-md);
@@ -894,9 +897,9 @@ body {
 }
 
 .icon-btn:hover {
-  background: rgba(255, 255, 255, 0.07);
+  background: #f8fafc;
   color: var(--text-primary);
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(0, 0, 0, 0.15);
 }
 
 /* Placeholders & Alerts */
@@ -927,8 +930,8 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(4, 6, 10, 0.7);
-  backdrop-filter: blur(10px);
+  background: rgba(15, 23, 42, 0.35); /* Soft dimming for light theme */
+  backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -946,10 +949,10 @@ body {
 .modal-card {
   width: 460px;
   max-width: 90vw;
-  background: #0d121f;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: var(--radius-md);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   animation: modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -1058,14 +1061,14 @@ body {
 }
 
 .auth-uri-box {
-  background: rgba(59, 130, 246, 0.08);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  border-radius: var(--radius-md);
+  background: rgba(236, 72, 153, 0.05);
+  border: 1px solid rgba(236, 72, 153, 0.15);
+  border-radius: var(--radius-sm);
   padding: 14px;
 }
 
 .auth-uri-box a {
-  color: var(--color-primary-hover);
+  color: var(--color-primary);
   text-decoration: none;
   font-weight: 600;
   font-size: 0.9rem;
@@ -1076,14 +1079,14 @@ body {
 }
 
 .auth-code-box {
-  background: rgba(0, 0, 0, 0.4);
+  background: #f8fafc;
   border: 1px dashed var(--border-color);
   font-size: 2rem;
   font-weight: 800;
   font-family: var(--font-mono);
-  color: var(--color-success-hover);
+  color: var(--color-primary);
   padding: 10px 20px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   letter-spacing: 2px;
   width: fit-content;
   margin: 0 auto;
@@ -1108,9 +1111,9 @@ body {
 }
 
 .proxy-effective-status {
-  background: rgba(255, 255, 255, 0.02);
+  background: #f8fafc;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   padding: 10px 14px;
   font-size: 0.8rem;
   display: flex;
@@ -1127,8 +1130,8 @@ body {
 }
 
 .win-ctrl-btn:hover {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border-color: rgba(255, 255, 255, 0.15) !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
 }
 
 .close-btn-win:hover {
@@ -1140,7 +1143,7 @@ body {
 /* Tab Switcher Styles */
 .tab-switcher {
   display: flex;
-  background: rgba(0, 0, 0, 0.25);
+  background: #f1f5f9;
   border-radius: 6px;
   padding: 2px;
   border: 1px solid var(--border-color);
@@ -1160,7 +1163,7 @@ body {
 
 .tab-btn:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(0, 0, 0, 0.02);
 }
 
 .tab-btn.active {
@@ -1175,7 +1178,7 @@ body {
 }
 
 .tree-group-header:hover {
-  background: rgba(255, 255, 255, 0.05) !important;
+  background: rgba(0, 0, 0, 0.03) !important;
   color: var(--text-primary) !important;
 }
 
@@ -1189,7 +1192,7 @@ body {
 
 /* App Footer styles */
 .app-footer {
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.02) !important;
 }
 
 .bottom-branch-block select {
@@ -1198,7 +1201,7 @@ body {
 }
 
 .bottom-branch-block select:hover {
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(0, 0, 0, 0.15);
 }
 
 .bottom-branch-block select:focus {
