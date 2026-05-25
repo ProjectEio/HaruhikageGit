@@ -7,6 +7,8 @@ use crate::core::{
     git, github, proxy,
 };
 
+use serde::Serialize;
+
 /// 根据配置构建 GitHub 客户端
 fn gh_client() -> Result<github::Client> {
     let cfg = Config::load()?;
@@ -14,6 +16,7 @@ fn gh_client() -> Result<github::Client> {
 }
 
 /// `hg status` 返回的完整状态快照
+#[derive(Serialize)]
 pub struct StatusInfo {
     pub global_name: Option<String>,
     pub global_email: Option<String>,
@@ -399,4 +402,75 @@ pub fn get_status() -> Result<StatusInfo> {
         profiles,
         config_path,
     })
+}
+
+pub fn get_git_status() -> Result<Vec<git::GitFileStatus>> {
+    git::get_status()
+}
+
+pub fn git_pull(alias: Option<&str>, global: bool) -> Result<String> {
+    if !git::is_git_repo() {
+        bail!("当前目录不是 git 仓库");
+    }
+    let branch = git::current_branch()?;
+    if let Some(a) = alias {
+        switch_profile(a, global)?;
+    }
+    let cfg = Config::load()?;
+    let proxy_url = proxy::resolve(&cfg.proxy);
+    git::pull("origin", &branch, proxy_url.as_deref())
+}
+
+pub fn git_fetch() -> Result<String> {
+    if !git::is_git_repo() {
+        bail!("当前目录不是 git 仓库");
+    }
+    let cfg = Config::load()?;
+    let proxy_url = proxy::resolve(&cfg.proxy);
+    git::fetch("origin", proxy_url.as_deref())
+}
+
+pub fn git_checkout(target: &str) -> Result<String> {
+    if !git::is_git_repo() {
+        bail!("当前目录不是 git 仓库");
+    }
+    git::checkout(target)
+}
+
+pub fn git_create_branch(name: &str, start_point: Option<&str>) -> Result<String> {
+    if !git::is_git_repo() {
+        bail!("当前目录不是 git 仓库");
+    }
+    git::create_branch(name, start_point)
+}
+
+pub fn git_delete_branch(name: &str, force: bool) -> Result<String> {
+    if !git::is_git_repo() {
+        bail!("当前目录不是 git 仓库");
+    }
+    git::delete_branch(name, force)
+}
+
+pub fn get_git_branches() -> Result<Vec<String>> {
+    git::get_branches()
+}
+
+pub fn get_git_commits(limit: usize) -> Result<Vec<git::CommitInfo>> {
+    git::get_log(limit)
+}
+
+pub fn git_stage_files(specs: Vec<String>) -> Result<()> {
+    if !git::is_git_repo() {
+        bail!("当前目录不是 git 仓库");
+    }
+    let refs: Vec<&str> = specs.iter().map(|s| s.as_str()).collect();
+    git::add_files(&refs)
+}
+
+pub fn git_unstage_files(specs: Vec<String>) -> Result<()> {
+    if !git::is_git_repo() {
+        bail!("当前目录不是 git 仓库");
+    }
+    let refs: Vec<&str> = specs.iter().map(|s| s.as_str()).collect();
+    git::reset_files(&refs)
 }

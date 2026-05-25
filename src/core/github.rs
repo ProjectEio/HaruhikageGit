@@ -1,7 +1,7 @@
 use std::{thread, time::Duration};
 
 use anyhow::{bail, Context, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::core::config::ProxySettings;
 
@@ -13,7 +13,7 @@ const UA: &str = concat!("HaruhikageGit/", env!("CARGO_PKG_VERSION"));
 
 // ── 类型定义 ──────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DeviceCode {
     pub device_code: String,
     pub user_code: String,

@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::process::{Command, Output, Stdio};
 
@@ -144,5 +145,173 @@ pub fn credential_approve(host: &str, username: &str, password: &str) -> Result<
         Ok(())
     } else {
         bail!("git credential approve 失败（请检查是否配置了 credential helper）")
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitFileStatus {
+    pub path: String,
+    pub status: String, // "modified", "added", "deleted", "untracked", "staged"
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommitInfo {
+    pub hash: String,
+    pub author: String,
+    pub email: String,
+    pub date: String,
+    pub message: String,
+}
+
+pub fn pull(remote: &str, branch: &str, proxy_url: Option<&str>) -> Result<String> {
+    let mut cmd = Command::new("git");
+    cmd.args(&["pull", remote, branch]);
+    if let Some(proxy) = proxy_url {
+        cmd.env("HTTPS_PROXY", proxy).env("HTTP_PROXY", proxy);
+    }
+    let out = cmd.output().context("执行 git pull 失败")?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    } else {
+        bail!("{}", String::from_utf8_lossy(&out.stderr).trim())
+    }
+}
+
+pub fn fetch(remote: &str, proxy_url: Option<&str>) -> Result<String> {
+    let mut cmd = Command::new("git");
+    cmd.args(&["fetch", remote]);
+    if let Some(proxy) = proxy_url {
+        cmd.env("HTTPS_PROXY", proxy).env("HTTP_PROXY", proxy);
+    }
+    let out = cmd.output().context("执行 git fetch 失败")?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    } else {
+        bail!("{}", String::from_utf8_lossy(&out.stderr).trim())
+    }
+}
+
+pub fn checkout(target: &str) -> Result<String> {
+    git_output(&["checkout", target]).context("执行 git checkout 失败")
+}
+
+pub fn create_branch(name: &str, start_point: Option<&str>) -> Result<String> {
+    let mut args = vec!["branch", name];
+    if let Some(sp) = start_point {
+        args.push(sp);
+    }
+    git_output(&args).context("创建分支失败")
+}
+
+pub fn delete_branch(name: &str, force: bool) -> Result<String> {
+    let flag = if force { "-D" } else { "-d" };
+    git_output(&["branch", flag, name]).context("删除分支失败")
+}
+
+pub fn get_branches() -> Result<Vec<String>> {
+    if !is_git_repo() {
+        return Ok(Vec::new());
+    }
+    let out = git_output(&["branch", "-a"])?;
+    let mut branches = Vec::new();
+    for line in out.lines() {
+        let cleaned = line.trim().trim_start_matches('*').trim().to_string();
+        if !cleaned.is_empty() {
+            branches.push(cleaned);
+        }
+    }
+    Ok(branches)
+}
+
+pub fn get_log(limit: usize) -> Result<Vec<CommitInfo>> {
+    if !is_git_repo() {
+        bail!("当前目录不是 git 仓库");
+    }
+    let limit_str = limit.to_string();
+    let out = git_output(&[
+        "log",
+        &format!("-n{}", limit_str),
+        "--pretty=format:%H|%an|%ae|%ad|%s",
+    ])?;
+    if out.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut commits = Vec::new();
+    for line in out.lines() {
+        let parts: Vec<&str> = line.splitn(5, '|').collect();
+        if parts.len() == 5 {
+            commits.push(CommitInfo {
+                hash: parts[0].to_string(),
+                author: parts[1].to_string(),
+                email: parts[2].to_string(),
+                date: parts[3].to_string(),
+                message: parts[4].to_string(),
+            });
+        }
+    }
+    Ok(commits)
+}
+
+pub fn get_status() -> Result<Vec<GitFileStatus>> {
+    if !is_git_repo() {
+        return Ok(Vec::new());
+    }
+    let output = git_output(&["status", "--porcelain"])?;
+    let mut files = Vec::new();
+    for line in output.lines() {
+        if line.len() < 4 {
+            continue;
+        }
+        let index_char = line.chars().nth(0).unwrap_or(' ');
+        let work_char = line.chars().nth(1).unwrap_or(' ');
+        let file_path = line[3..].trim().to_string();
+
+        if index_char == '?' && work_char == '?' {
+            files.push(GitFileStatus {
+                path: file_path,
+                status: "untracked".to_string(),
+            });
+        } else {
+            if index_char != ' ' {
+                files.push(GitFileStatus {
+                    path: file_path.clone(),
+                    status: "staged".to_string(),
+                });
+            }
+            if work_char != ' ' {
+                let status_str = match work_char {
+                    'M' => "modified",
+                    'D' => "deleted",
+                    _ => "unstaged",
+                };
+                files.push(GitFileStatus {
+                    path: file_path,
+                    status: status_str.to_string(),
+                });
+            }
+        }
+    }
+    Ok(files)
+}
+
+pub fn add_files(specs: &[&str]) -> Result<()> {
+    let mut args = vec!["add"];
+    args.extend(specs);
+    let out = run_git(&args)?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        bail!("{}", String::from_utf8_lossy(&out.stderr).trim())
+    }
+}
+
+pub fn reset_files(specs: &[&str]) -> Result<()> {
+    let mut args = vec!["reset"];
+    args.extend(specs);
+    let out = run_git(&args)?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        bail!("{}", String::from_utf8_lossy(&out.stderr).trim())
     }
 }
