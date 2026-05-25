@@ -5,6 +5,7 @@ interface FileStagingProps {
   gitStatus: GitFileStatus[];
   onStageFiles: (paths: string[], stage: boolean) => void;
 
+  onStageAll: () => void;
   onUndoAll: () => void;
   onSelectFileForPreview: (path: string) => void;
 }
