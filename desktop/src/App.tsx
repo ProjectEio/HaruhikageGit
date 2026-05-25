@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 // --- Components & Types ---
-import { StatusInfo, GitFileStatus, CommitInfo, DeviceCode, ProxySettings, Notification, ManagedRepository } from "./types";
+import { StatusInfo, GitFileStatus, CommitInfo, DeviceCode, ProxySettings, Notification, ManagedRepository, SyncStatus } from "./types";
 import { TopNavBar } from "./components/TopNavBar";
 import { WorkspacePanel } from "./components/WorkspacePanel";
 import { DiffAndActionsArea } from "./components/DiffAndActionsArea";
@@ -18,6 +18,7 @@ function App() {
   const [branches, setBranches] = useState<string[]>([]);
   const [currentBranch, setCurrentBranch] = useState<string>("unknown");
   const [commits, setCommits] = useState<CommitInfo[]>([]);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   
   // Multi-repository states
   const [repos, setRepos] = useState<ManagedRepository[]>([]);
@@ -26,7 +27,7 @@ function App() {
   const handleSwitchBranch = async (branchName: string) => {
     try {
       await invoke("git_checkout", { target: branchName });
-      loadGitData();
+      reloadData();
     } catch (e) {
       showNotif(`切换分支失败: ${e}`, "error");
     }
@@ -131,8 +132,12 @@ function App() {
         
         // Fetch Current Branch
         try {
-          const branch: string = await invoke("get_current_branch");
-          setCurrentBranch(branch);
+          const c: string = await invoke("get_current_branch");
+          setCurrentBranch(c);
+          
+          // Fetch Sync Status
+          const sync: SyncStatus = await invoke("get_sync_status");
+          setSyncStatus(sync);
         } catch (e) {
           setCurrentBranch("unknown");
         }
@@ -151,6 +156,25 @@ function App() {
   useEffect(() => {
     loadRepos();
   }, []);
+
+  useEffect(() => {
+    // Auto-fetch sync status every 60 seconds
+    const interval = setInterval(async () => {
+      if (activeRepoPath) {
+        try {
+          // Perform a background fetch to update remote tracking branches
+          await invoke("git_fetch");
+          // Update sync status
+          const sync: SyncStatus = await invoke("get_sync_status");
+          setSyncStatus(sync);
+        } catch (e) {
+          console.error("Auto fetch failed:", e);
+        }
+      }
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [activeRepoPath]);
 
   useEffect(() => {
     reloadData();
@@ -538,6 +562,7 @@ function App() {
           branches={branches}
           onSwitchBranch={handleSwitchBranch}
           onRemoveRepo={handleRemoveRepo}
+          syncStatus={syncStatus}
         />
 
       {/* Main Workspace Layout (Two-Column with lines) */}

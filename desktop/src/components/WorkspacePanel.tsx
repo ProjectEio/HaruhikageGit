@@ -100,7 +100,7 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
         )}
 
         {activeTab === "history" && (
-          <div className="timeline" style={{ padding: "10px", animation: "modalIn 0.2s ease", overflowY: "auto", flex: 1 }}>
+          <div className="timeline" style={{ padding: "10px", overflowY: "auto", flex: 1 }}>
             {!status || !status.is_repo ? (
               <div className="empty-placeholder" style={{ padding: "40px" }}>未在 Git 仓库内，暂无历史提交日志</div>
             ) : commits.length === 0 ? (
