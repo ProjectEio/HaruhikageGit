@@ -457,13 +457,6 @@ function App() {
     showNotif("提交 Hash 已复制到剪贴板", "success");
   };
 
-  const handleMinimize = async () => {
-    try {
-      await appWindow.minimize();
-    } catch (err) {
-      console.error("最小化窗口失败:", err);
-    }
-  };
 
   const handleClose = async () => {
     try {
@@ -483,8 +476,6 @@ function App() {
     }
   };
 
-  const activeRepo = repos.find(r => r.path === activeRepoPath);
-
   return (
     <div className="app-container">
       {/* Top Titlebar Navigation (Abbreviation/logo removed, and solid text colors instead of gradient) */}
@@ -494,25 +485,43 @@ function App() {
             HaruhikageGit
           </span>
         </div>
-        <div className="repo-badge" data-tauri-drag-region>
-          <span className={`indicator ${status?.is_repo ? "green" : "red"}`} data-tauri-drag-region></span>
-          <span className="text" data-tauri-drag-region style={{ fontWeight: "600" }}>
-            {status?.is_repo ? `当前仓库: ${activeRepo?.name || "本地目录"}` : "未连接 Git 仓库"}
-          </span>
-        </div>
-        <div className="header-actions">
-          <button className="icon-btn" onClick={handleOpenProxy} title="网络代理配置">
-            代理
+        <div className="header-actions" style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          <button
+            className="win-btn-flat"
+            onClick={handleOpenProxy}
+            title="设置与代理"
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "var(--text-secondary)",
+              cursor: "pointer",
+              fontSize: "1.1rem",
+              padding: "4px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "color var(--transition-fast)"
+            }}
+          >
+            ⚙
           </button>
-          {status?.is_repo && (
-            <button className="icon-btn" onClick={() => setActiveModal("github")} title="GitHub 别名关联">
-              GitHub 关联
-            </button>
-          )}
-          <button className="icon-btn win-ctrl-btn" onClick={handleMinimize} title="最小化" style={{ minWidth: "32px", padding: "6px 0", justifyContent: "center" }}>
-            -
-          </button>
-          <button className="icon-btn win-ctrl-btn close-btn-win" onClick={handleClose} title="关闭" style={{ minWidth: "32px", padding: "6px 0", justifyContent: "center" }}>
+          <button
+            className="win-btn-flat close-btn-flat"
+            onClick={handleClose}
+            title="关闭窗口"
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "var(--text-secondary)",
+              cursor: "pointer",
+              fontSize: "1.1rem",
+              padding: "4px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "color var(--transition-fast)"
+            }}
+          >
             ✕
           </button>
         </div>

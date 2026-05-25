@@ -68,12 +68,12 @@ body {
 }
 
 .app-header {
-  height: 48px;
-  min-height: 48px;
+  height: 36px;
+  min-height: 36px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 16px;
   background-image: linear-gradient(rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.65)), url('/cherry_blossom_header.png');
   background-size: cover;
   background-position: center;
@@ -96,6 +96,7 @@ body {
   font-family: 'Outfit', sans-serif;
   letter-spacing: 0.5px;
   color: var(--text-primary);
+  font-size: 0.9rem;
 }
 
 .repo-badge {
@@ -1191,5 +1192,18 @@ body {
 .bottom-branch-block select:focus {
   border-color: var(--color-primary);
   outline: none;
+}
+
+/* Flat Window Buttons Hover Styles (No background or borders) */
+.win-btn-flat {
+  transition: color var(--transition-fast) !important;
+}
+
+.win-btn-flat:hover {
+  color: var(--color-primary) !important;
+}
+
+.close-btn-flat:hover {
+  color: var(--color-danger) !important;
 }
 
