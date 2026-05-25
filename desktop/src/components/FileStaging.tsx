@@ -1,11 +1,9 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { GitFileStatus } from "../types";
 
 interface FileStagingProps {
   gitStatus: GitFileStatus[];
   onStageFiles: (paths: string[], stage: boolean) => void;
-
-  onStageAll: () => void;
   onUndoAll: () => void;
   onSelectFileForPreview: (path: string) => void;
 }
@@ -13,7 +11,6 @@ interface FileStagingProps {
 export const FileStaging: React.FC<FileStagingProps> = ({
   gitStatus,
   onStageFiles,
-  onStageAll,
   onUndoAll,
   onSelectFileForPreview,
 }) => {

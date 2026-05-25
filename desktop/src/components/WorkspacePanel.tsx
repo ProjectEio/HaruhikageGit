@@ -12,7 +12,6 @@ interface WorkspacePanelProps {
   commitStageAll: boolean;
   setCommitStageAll: (val: boolean) => void;
   onStageFiles: (paths: string[], stage: boolean) => void;
-  onStageAll: () => void;
   onGitCommit: () => void;
   commits: CommitInfo[];
   onCopyHash: (hash: string) => void;
@@ -30,7 +29,6 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
   commitStageAll,
   setCommitStageAll,
   onStageFiles,
-  onStageAll,
   onGitCommit,
   commits,
   onCopyHash,
@@ -81,7 +79,6 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
             <FileStaging
               gitStatus={gitStatus}
               onStageFiles={onStageFiles}
-              onStageAll={onStageAll}
               onUndoAll={onUndoAll}
               onSelectFileForPreview={onSelectFileForPreview}
             />

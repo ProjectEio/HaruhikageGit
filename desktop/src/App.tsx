@@ -441,15 +441,7 @@ function App() {
     }
   };
 
-  const handleStageAll = async () => {
-    try {
-      await invoke("git_stage_files", { specs: ["."] });
-      showNotif("已暂存工作区当前所有变更", "success");
-      reloadData();
-    } catch (err) {
-      showNotif("暂存失败: " + err, "danger");
-    }
-  };
+
 
   const handleStageFiles = async (paths: string[], stage: boolean) => {
     if (paths.length === 0) return;
@@ -597,7 +589,6 @@ function App() {
               commitStageAll={commitStageAll}
               setCommitStageAll={setCommitStageAll}
               onStageFiles={handleStageFiles}
-              onStageAll={handleStageAll}
               onGitCommit={handleGitCommit}
               commits={commits}
               onCopyHash={handleCopyHash}
