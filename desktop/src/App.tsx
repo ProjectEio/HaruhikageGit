@@ -108,7 +108,9 @@ function App() {
 
         // Fetch Working Tree
         const files: GitFileStatus[] = await invoke("get_git_status");
+        console.log("[App] get_git_status returned:", JSON.stringify(files.map(f => ({ path: f.path, status: f.status, pathBytes: Array.from(f.path).map(c => c.charCodeAt(0)).slice(0, 8) }))));
         setGitStatus(files);
+
 
         // Fetch Branches
         const rawBranches: string[] = await invoke("get_git_branches");

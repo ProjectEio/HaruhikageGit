@@ -22,7 +22,14 @@ fn remove_profile(alias: String) -> Result<(), String> {
 
 #[tauri::command]
 fn get_git_status() -> Result<Vec<git::GitFileStatus>, String> {
-    ops::get_git_status().map_err(|e| e.to_string())
+    let result = ops::get_git_status().map_err(|e| e.to_string());
+    if let Ok(ref files) = result {
+        for f in files {
+            let bytes: Vec<u8> = f.path.bytes().take(10).collect();
+            eprintln!("[get_git_status] path='{}' bytes={:?}", f.path, bytes);
+        }
+    }
+    result
 }
 
 #[tauri::command]
@@ -58,6 +65,11 @@ fn get_git_branches() -> Result<Vec<String>, String> {
 #[tauri::command]
 fn get_git_commits(limit: usize) -> Result<Vec<git::CommitInfo>, String> {
     ops::get_git_commits(limit).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_sync_status() -> Result<git::SyncStatus, String> {
+    git::get_sync_status().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -310,6 +322,9 @@ fn git_discard_changes() -> Result<(), String> {
 
 #[tauri::command]
 fn get_file_diff(path: String) -> Result<String, String> {
+    let path_bytes: Vec<u8> = path.bytes().take(15).collect();
+    eprintln!("[get_file_diff] received path='{}' bytes={:?}", path, path_bytes);
+
     // Get the actual git root to resolve paths correctly since `git status --porcelain` 
     // returns paths relative to the git root.
     let git_root_out = Command::new("git")
@@ -325,6 +340,7 @@ fn get_file_diff(path: String) -> Result<String, String> {
     
     // Remove potential surrounding quotes from git status porcelain output
     let clean_path = path.trim_matches('"').trim_matches('\'').to_string();
+    eprintln!("[get_file_diff] clean_path='{}' cwd='{}'", clean_path, cwd.display());
     
     let out = Command::new("git")
         .current_dir(&cwd)
@@ -423,6 +439,7 @@ pub fn run() {
             git_discard_changes,
             get_file_diff,
             get_git_root,
+            get_sync_status,
             get_current_branch
         ])
         .run(tauri::generate_context!())

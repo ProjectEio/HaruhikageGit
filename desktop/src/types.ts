@@ -27,6 +27,13 @@ export interface CommitInfo {
   email: string;
   date: string;
   message: string;
+  is_remote: boolean;
+}
+
+export interface SyncStatus {
+  ahead: number;
+  behind: number;
+  has_upstream: boolean;
 }
 
 export interface DeviceCode {

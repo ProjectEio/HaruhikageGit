@@ -111,14 +111,35 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
                 return (
                   <div className="timeline-item" key={c.hash}>
                     <div className="timeline-header">
-                      <span
-                        className="commit-hash"
-                        onClick={() => onCopyHash(c.hash)}
-                        title="点击复制完整 Hash"
-                        style={{ cursor: "pointer" }}
-                      >
-                        {shortHash}
-                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span
+                          className="commit-hash"
+                          onClick={() => onCopyHash(c.hash)}
+                          title="点击复制完整 Hash"
+                          style={{ cursor: "pointer" }}
+                        >
+                          {shortHash}
+                        </span>
+                        {!c.is_remote && (
+                          <span style={{ 
+                            fontSize: "0.65rem", 
+                            padding: "2px 6px", 
+                            background: "rgba(16, 185, 129, 0.1)", 
+                            color: "#059669", 
+                            borderRadius: "4px", 
+                            fontWeight: "600",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px"
+                          }}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="12" y1="19" x2="12" y2="5"></line>
+                              <polyline points="5 12 12 5 19 12"></polyline>
+                            </svg>
+                            未推送
+                          </span>
+                        )}
+                      </div>
                       <span className="commit-date">{c.date}</span>
                     </div>
                     <div className="commit-msg">{c.message}</div>

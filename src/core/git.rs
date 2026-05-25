@@ -154,13 +154,21 @@ pub struct GitFileStatus {
     pub status: String, // "modified", "added", "deleted", "untracked", "staged"
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CommitInfo {
     pub hash: String,
     pub author: String,
     pub email: String,
     pub date: String,
     pub message: String,
+    pub is_remote: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SyncStatus {
+    pub ahead: u32,
+    pub behind: u32,
+    pub has_upstream: bool,
 }
 
 pub fn pull(remote: &str, branch: &str, proxy_url: Option<&str>) -> Result<String> {
@@ -231,25 +239,71 @@ pub fn get_log(limit: usize) -> Result<Vec<CommitInfo>> {
     let out = git_output(&[
         "log",
         &format!("-n{}", limit_str),
-        "--pretty=format:%H|%an|%ae|%ad|%s",
+        "--pretty=format:%H|%an|%ae|%ad|%s|%D",
     ])?;
     if out.is_empty() {
         return Ok(Vec::new());
     }
     let mut commits = Vec::new();
+    let mut is_remote_reached = false;
+    
     for line in out.lines() {
-        let parts: Vec<&str> = line.splitn(5, '|').collect();
-        if parts.len() == 5 {
+        let parts: Vec<&str> = line.splitn(6, '|').collect();
+        if parts.len() >= 5 {
+            let refs = if parts.len() == 6 { parts[5] } else { "" };
+            // If we hit a remote tracking branch, this and all older commits are remote
+            if refs.contains("origin/") || refs.contains("upstream/") {
+                is_remote_reached = true;
+            }
+            
             commits.push(CommitInfo {
                 hash: parts[0].to_string(),
                 author: parts[1].to_string(),
                 email: parts[2].to_string(),
                 date: parts[3].to_string(),
                 message: parts[4].to_string(),
+                is_remote: is_remote_reached,
             });
         }
     }
     Ok(commits)
+}
+
+pub fn get_sync_status() -> Result<SyncStatus> {
+    if !is_git_repo() {
+        return Ok(SyncStatus { ahead: 0, behind: 0, has_upstream: false });
+    }
+    let root_out = Command::new("git")
+        .args(&["rev-parse", "--show-toplevel"])
+        .output()
+        .context("获取 git root 失败")?;
+    let root = if root_out.status.success() {
+        String::from_utf8_lossy(&root_out.stdout).trim().to_string()
+    } else {
+        bail!("无法获取 git 仓库根目录");
+    };
+
+    let out = Command::new("git")
+        .current_dir(&root)
+        .args(&["rev-list", "--left-right", "--count", "HEAD...@{u}"])
+        .output();
+    
+    match out {
+        Ok(output) if output.status.success() => {
+            let str_out = String::from_utf8_lossy(&output.stdout);
+            let parts: Vec<&str> = str_out.split_whitespace().collect();
+            if parts.len() == 2 {
+                let ahead = parts[0].parse().unwrap_or(0);
+                let behind = parts[1].parse().unwrap_or(0);
+                Ok(SyncStatus { ahead, behind, has_upstream: true })
+            } else {
+                Ok(SyncStatus { ahead: 0, behind: 0, has_upstream: false })
+            }
+        },
+        _ => {
+            Ok(SyncStatus { ahead: 0, behind: 0, has_upstream: false })
+        }
+    }
 }
 
 pub fn get_status() -> Result<Vec<GitFileStatus>> {

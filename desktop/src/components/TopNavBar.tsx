@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ManagedRepository } from "../types";
+import { ManagedRepository, SyncStatus } from "../types";
 import { RepoSidebar } from "./RepoSidebar";
 
 interface TopNavBarProps {
@@ -13,6 +13,7 @@ interface TopNavBarProps {
   currentBranch: string;
   branches: string[];
   onSwitchBranch: (branch: string) => void;
+  syncStatus?: SyncStatus | null;
 }
 
 export const TopNavBar: React.FC<TopNavBarProps> = ({
@@ -25,6 +26,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
   currentBranch,
   branches,
   onSwitchBranch,
+  syncStatus,
 }) => {
   const [repoMenuOpen, setRepoMenuOpen] = useState(false);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
@@ -59,9 +61,73 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
     activeRepoName = parts[parts.length - 1] || activeRepoPath;
   }
 
+  let syncTitle = "Sync branch";
+  let syncDesc = "Push / Pull commits";
+  let syncIcon = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "10px" }}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+      <polyline points="17 8 12 3 7 8"></polyline>
+      <line x1="12" y1="3" x2="12" y2="15"></line>
+    </svg>
+  );
+
+  if (syncStatus) {
+    if (!syncStatus.has_upstream) {
+      syncTitle = "Publish branch";
+      syncDesc = "Push to remote";
+      syncIcon = (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "10px" }}>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="17 8 12 3 7 8"></polyline>
+          <line x1="12" y1="3" x2="12" y2="15"></line>
+        </svg>
+      );
+    } else if (syncStatus.ahead > 0 && syncStatus.behind === 0) {
+      syncTitle = "Push commits";
+      syncDesc = `⬆ ${syncStatus.ahead} local`;
+      syncIcon = (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "10px" }}>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="17 8 12 3 7 8"></polyline>
+          <line x1="12" y1="3" x2="12" y2="15"></line>
+        </svg>
+      );
+    } else if (syncStatus.behind > 0 && syncStatus.ahead === 0) {
+      syncTitle = "Pull commits";
+      syncDesc = `⬇ ${syncStatus.behind} remote`;
+      syncIcon = (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "10px" }}>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 16 12 21 17 16"></polyline>
+          <line x1="12" y1="21" x2="12" y2="9"></line>
+        </svg>
+      );
+    } else if (syncStatus.ahead > 0 && syncStatus.behind > 0) {
+      syncTitle = "Sync (Merge)";
+      syncDesc = `⬆ ${syncStatus.ahead} ⬇ ${syncStatus.behind}`;
+      syncIcon = (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "10px" }}>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="17 8 12 3 7 8"></polyline>
+          <line x1="12" y1="3" x2="12" y2="15"></line>
+          <polyline points="7 16 12 21 17 16"></polyline>
+          <line x1="12" y1="21" x2="12" y2="9"></line>
+        </svg>
+      );
+    } else {
+      syncTitle = "Up to date";
+      syncDesc = "No pending commits";
+    }
+  }
+
   const handleSync = async () => {
     try {
-      await invoke("git_push", { remote: "origin", branch: currentBranch });
+      if (syncStatus && syncStatus.behind > 0) {
+        await invoke("git_pull", { alias: null, global: false });
+      }
+      if (!syncStatus || !syncStatus.has_upstream || syncStatus.ahead > 0) {
+        await invoke("git_push");
+      }
     } catch (e) {
       console.error(e);
     }
@@ -231,14 +297,10 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
         className="hover-bg"
         onClick={handleSync}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "10px" }}>
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="17 8 12 3 7 8"></polyline>
-          <line x1="12" y1="3" x2="12" y2="15"></line>
-        </svg>
+        {syncIcon}
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: "500", lineHeight: "1" }}>Sync branch</span>
-          <span style={{ fontSize: "0.85rem", color: "var(--text-primary)", fontWeight: "500", lineHeight: "1.2" }}>Push / Pull commits</span>
+          <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: "500", lineHeight: "1" }}>{syncTitle}</span>
+          <span style={{ fontSize: "0.85rem", color: "var(--text-primary)", fontWeight: "500", lineHeight: "1.2" }}>{syncDesc}</span>
         </div>
       </div>
       
