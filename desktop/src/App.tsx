@@ -4,11 +4,9 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 // --- Components & Types ---
 import { StatusInfo, GitFileStatus, CommitInfo, DeviceCode, ProxySettings, Notification, ManagedRepository } from "./types";
-import { ProfilesPanel } from "./components/ProfilesPanel";
+import { TopNavBar } from "./components/TopNavBar";
 import { WorkspacePanel } from "./components/WorkspacePanel";
-import { RepoSidebar } from "./components/RepoSidebar";
-import { QuickActionsPanel } from "./components/QuickActionsPanel";
-import { FilePreviewPanel } from "./components/FilePreviewPanel";
+import { DiffAndActionsArea } from "./components/DiffAndActionsArea";
 import { AddProfileModal, GithubLoginModal, ProxyModal } from "./components/Modals";
 
 function App() {
@@ -18,12 +16,21 @@ function App() {
   const [status, setStatus] = useState<StatusInfo | null>(null);
   const [gitStatus, setGitStatus] = useState<GitFileStatus[]>([]);
   const [branches, setBranches] = useState<string[]>([]);
-  const [currentBranch, setCurrentBranch] = useState<string>("");
+  const [currentBranch, setCurrentBranch] = useState<string>("unknown");
   const [commits, setCommits] = useState<CommitInfo[]>([]);
   
   // Multi-repository states
   const [repos, setRepos] = useState<ManagedRepository[]>([]);
   const [activeRepoPath, setActiveRepoPath] = useState<string | null>(null);
+
+  const handleSwitchBranch = async (branchName: string) => {
+    try {
+      await invoke("git_checkout", { target: branchName });
+      loadGitData();
+    } catch (e) {
+      showNotif(`切换分支失败: ${e}`, "error");
+    }
+  };
 
   // File Preview state
   const [selectedPreviewPath, setSelectedPreviewPath] = useState<string | null>(null);
@@ -89,6 +96,16 @@ function App() {
       setStatus(res);
 
       if (res.is_repo) {
+        if (!activeRepoPath) {
+          try {
+            const root: string = await invoke("get_git_root");
+            setActiveRepoPath(root);
+            await invoke("switch_active_repository", { path: root });
+          } catch (e) {
+            console.error("Failed to get git root", e);
+          }
+        }
+
         // Fetch Working Tree
         const files: GitFileStatus[] = await invoke("get_git_status");
         setGitStatus(files);
@@ -106,9 +123,17 @@ function App() {
         setBranches(cleanBranches);
         setCurrentBranch(active);
 
-        // Fetch Logs
-        const logs: CommitInfo[] = await invoke("get_git_commits", { limit: 15 });
+        // Fetch Commits
+        const logs: CommitInfo[] = await invoke("get_git_commits", { limit: 100 });
         setCommits(logs);
+        
+        // Fetch Current Branch
+        try {
+          const branch: string = await invoke("get_current_branch");
+          setCurrentBranch(branch);
+        } catch (e) {
+          setCurrentBranch("unknown");
+        }
       } else {
         setGitStatus([]);
         setBranches([]);
@@ -381,14 +406,13 @@ function App() {
     }
   };
 
-  const handleStageFile = async (path: string, staged: boolean) => {
+  const handleStageFiles = async (paths: string[], stage: boolean) => {
+    if (paths.length === 0) return;
     try {
-      if (staged) {
-        await invoke("git_unstage_files", { specs: [path] });
-        showNotif(`已取消暂存: ${path}`, "success");
+      if (!stage) {
+        await invoke("git_unstage_files", { specs: paths });
       } else {
-        await invoke("git_stage_files", { specs: [path] });
-        showNotif(`已暂存文件: ${path}`, "success");
+        await invoke("git_stage_files", { specs: paths });
       }
       reloadData();
     } catch (err) {
@@ -477,9 +501,9 @@ function App() {
   return (
     <div className="app-container">
       {/* Top Titlebar Navigation (Abbreviation/logo removed, and solid text colors instead of gradient) */}
-      <header className="app-header" data-tauri-drag-region onMouseDown={handleHeaderMouseDown}>
+      <header className="app-header" data-tauri-drag-region onMouseDown={handleHeaderMouseDown} style={{ height: "30px", minHeight: "30px", padding: "0 10px" }}>
         <div className="brand" data-tauri-drag-region>
-          <span className="title" data-tauri-drag-region style={{ paddingLeft: "4px" }}>
+          <span className="title" data-tauri-drag-region style={{ paddingLeft: "4px", fontSize: "0.85rem", fontWeight: "600" }}>
             HaruhikageGit
           </span>
         </div>
@@ -500,81 +524,54 @@ function App() {
           </button>
         </div>
       </header>
+      
+      {/* Top Navigation Bar */}
+        <TopNavBar
+          repos={repos}
+          activeRepoPath={activeRepoPath}
+          onSelectRepo={setActiveRepoPath}
+          onAddRepo={handleAddRepo}
+          onCreateRepo={() => {}}
+          currentBranch={currentBranch}
+          branches={branches}
+          onSwitchBranch={handleSwitchBranch}
+          onRemoveRepo={handleRemoveRepo}
+        />
 
-      {/* Main Workspace Three-Column Layout */}
-      <div className="main-layout" style={{ flex: 1, overflow: "hidden", display: "flex", gap: "16px", padding: "16px" }}>
-        {/* Left Side: RepoSwitcher & WorkspacePanel (Enlarged control tower) */}
-        <aside className="sidebar-left" style={{ width: "310px", display: "flex", flexDirection: "column", gap: "16px", flexShrink: 0, position: "relative", height: "100%" }}>
-          <RepoSidebar
-            repos={repos}
-            activePath={activeRepoPath}
-            onSwitchRepo={handleSwitchRepo}
-            onAddRepo={handleAddRepo}
-            onRemoveRepo={handleRemoveRepo}
-          />
-          <WorkspacePanel
-            status={status}
-            gitStatus={gitStatus}
-            commitMsg={commitMsg}
-            setCommitMsg={setCommitMsg}
-            commitStageAll={commitStageAll}
-            setCommitStageAll={setCommitStageAll}
-            onStageFile={handleStageFile}
-            onStageAll={handleStageAll}
-            onGitCommit={handleGitCommit}
-            commits={commits}
-            onCopyHash={handleCopyHash}
-            onUndoAll={handleUndoAll}
-            onSelectFileForPreview={(path) => setSelectedPreviewPath(path)} // Toggle preview
-            onSwitchProfile={handleSwitchProfile}
-          />
-        </aside>
-
-        {/* Center: Enormous Diff Preview Panel or ACG Welcome Board */}
-        <main className="workspace-center" style={{ flex: 1.8, display: "flex", flexDirection: "column", overflow: "hidden", height: "100%" }}>
-          {selectedPreviewPath ? (
-            <FilePreviewPanel
-              filePath={selectedPreviewPath}
-              onClose={() => setSelectedPreviewPath(null)}
+      {/* Main Workspace Layout (Two-Column with lines) */}
+      <div className="main-layout" style={{ flex: 1, overflow: "hidden", display: "flex", gap: "0", padding: "0" }}>
+        {/* Left Side: WorkspacePanel */}
+        <aside className="sidebar-left" style={{ width: "340px", display: "flex", flexDirection: "column", flexShrink: 0, position: "relative", height: "100%", borderRight: "1px solid var(--border-color)", background: "#ffffff", padding: "0" }}>
+          <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            <WorkspacePanel
+              status={status}
+              gitStatus={gitStatus}
+              currentBranch={currentBranch}
+              commitMsg={commitMsg}
+              setCommitMsg={setCommitMsg}
+              commitStageAll={commitStageAll}
+              setCommitStageAll={setCommitStageAll}
+              onStageFiles={handleStageFiles}
+              onStageAll={handleStageAll}
+              onGitCommit={handleGitCommit}
+              commits={commits}
+              onCopyHash={handleCopyHash}
+              onUndoAll={handleUndoAll}
+              onSelectFileForPreview={(path) => setSelectedPreviewPath(path)}
+              onSwitchProfile={handleSwitchProfile}
             />
-          ) : (
-            <div className="section-card" style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "20px", background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "40px", textAlign: "center" }}>
-              <div style={{ fontSize: "4.5rem", animation: "float 4s ease-in-out infinite" }}>🌸</div>
-              <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: "1.4rem", fontWeight: "700", color: "var(--text-primary)" }}>HaruhikageGit 极简工作区</h2>
-              <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", maxWidth: "340px", lineHeight: "1.6" }}>
-                请点击左侧列表中的修改文件，本大视窗栏目将直接为您渲染高清、极速的单栏 diff 差异对比预览。
-              </p>
-              <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
-                <span style={{ fontSize: "0.7rem", background: "rgba(236, 72, 153, 0.08)", color: "var(--color-primary)", padding: "4px 10px", borderRadius: "12px", fontWeight: "600" }}>极速 Git 管理</span>
-                <span style={{ fontSize: "0.7rem", background: "rgba(16, 185, 129, 0.08)", color: "var(--color-success-hover)", padding: "4px 10px", borderRadius: "12px", fontWeight: "600" }}>ACG 樱花风</span>
-              </div>
-            </div>
-          )}
-        </main>
-
-        {/* Right Side: Quick Actions Panel & Accounts Profiles Panel (Expanded & Always Visible) */}
-        <aside className="sidebar-right" style={{ width: "330px", display: "flex", flexDirection: "column", gap: "16px", flexShrink: 0, height: "100%", overflow: "hidden" }}>
-          <QuickActionsPanel activePath={activeRepoPath} showNotif={showNotif} />
-          
-          <ProfilesPanel
-            status={status}
-            onSwitchProfile={handleSwitchProfile}
-            onDeleteProfile={handleDeleteProfile}
-            onOpenAddModal={() => {
-              setNewAlias("");
-              setNewName("");
-              setNewEmail("");
-              setNewGpg("");
-              setActiveModal("add");
-            }}
-            onOpenGithubModal={() => {
-              setGithubAlias("github");
-              setGithubPat("");
-              setGithubDevice(null);
-              setActiveModal("github");
-            }}
-          />
+          </div>
         </aside>
+
+        {/* Center: Diff Preview and Quick Actions */}
+        <main className="workspace-center" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", height: "100%", background: "#f8fafc" }}>
+          <DiffAndActionsArea
+            filePath={selectedPreviewPath}
+            activePath={activeRepoPath}
+            onClosePreview={() => setSelectedPreviewPath(null)}
+            showNotif={showNotif}
+          />
+        </main>
       </div>
 
       {/* Bottom Bar: Branch Switcher & neon Sync buttons (With Suitable Colors) */}

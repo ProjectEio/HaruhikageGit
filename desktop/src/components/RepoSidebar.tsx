@@ -7,6 +7,7 @@ interface RepoSidebarProps {
   onSwitchRepo: (path: string) => void;
   onAddRepo: (name: string, path: string, org: string, user: string, group: string) => void;
   onRemoveRepo: (path: string) => void;
+  forceExpanded?: boolean;
 }
 
 type GroupBy = "org" | "user" | "group";
@@ -17,10 +18,18 @@ export const RepoSidebar: React.FC<RepoSidebarProps> = ({
   onSwitchRepo,
   onAddRepo,
   onRemoveRepo,
+  forceExpanded = false,
 }) => {
   const [groupBy, setGroupBy] = useState<GroupBy>("org");
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [isCollapsed, setIsCollapsed] = useState(!forceExpanded);
+
+  // If forceExpanded changes, sync isCollapsed
+  React.useEffect(() => {
+    if (forceExpanded) {
+      setIsCollapsed(false);
+    }
+  }, [forceExpanded]);
 
   // Form states
   const [name, setName] = useState("");
@@ -70,8 +79,20 @@ export const RepoSidebar: React.FC<RepoSidebarProps> = ({
     setIsAddOpen(false);
   };
 
-  const activeRepo = repos.find((r) => r.path === activePath);
-  const activeRepoName = activeRepo ? activeRepo.name : "未关联本地仓库";
+  const normalizePath = (p: string | null) => {
+    if (!p) return "";
+    return p.replace(/\\/g, "/").toLowerCase();
+  };
+
+  const activeRepo = repos.find((r) => normalizePath(r.path) === normalizePath(activePath));
+  let activeRepoName = "未关联本地仓库";
+  if (activeRepo) {
+    activeRepoName = activeRepo.name;
+  } else if (activePath) {
+    // Fallback to folder name
+    const parts = activePath.replace(/\\/g, "/").split("/");
+    activeRepoName = parts[parts.length - 1] || activePath;
+  }
 
   if (isCollapsed) {
     return (
@@ -113,22 +134,23 @@ export const RepoSidebar: React.FC<RepoSidebarProps> = ({
 
   return (
     <div
-      className="section-card repo-sidebar"
+      className={`section-card repo-sidebar ${forceExpanded ? 'dropdown-mode' : ''}`}
       style={{
-        position: "absolute",
+        position: forceExpanded ? "relative" : "absolute",
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
         zIndex: 100,
-        background: "var(--bg-sidebar)",
+        background: forceExpanded ? "transparent" : "var(--bg-sidebar)",
         display: "flex",
         flexDirection: "column",
         gap: "10px",
-        padding: "14px",
-        boxShadow: "var(--shadow-lg)",
-        animation: "slideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+        padding: forceExpanded ? "10px 14px" : "14px",
+        boxShadow: forceExpanded ? "none" : "var(--shadow-lg)",
+        animation: forceExpanded ? "none" : "slideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards",
         maxHeight: "100%",
+        height: "100%",
         overflow: "hidden"
       }}
     >
@@ -143,14 +165,16 @@ export const RepoSidebar: React.FC<RepoSidebarProps> = ({
           >
             + 托管
           </button>
-          <button
-            className="btn btn-sm btn-secondary"
-            onClick={() => setIsCollapsed(true)}
-            title="收起面板"
-            style={{ fontSize: "0.7rem", padding: "4px 8px", background: "rgba(0,0,0,0.03)", border: "1px solid var(--border-color)", color: "var(--text-primary)" }}
-          >
-            ▲ 收起
-          </button>
+          {!forceExpanded && (
+            <button
+              className="btn btn-sm btn-secondary"
+              onClick={() => setIsCollapsed(true)}
+              title="收起面板"
+              style={{ fontSize: "0.7rem", padding: "4px 8px", background: "rgba(0,0,0,0.03)", border: "1px solid var(--border-color)", color: "var(--text-primary)" }}
+            >
+              ▲ 收起
+            </button>
+          )}
         </div>
       </div>
 
@@ -219,7 +243,7 @@ export const RepoSidebar: React.FC<RepoSidebarProps> = ({
                 {isExpanded && (
                   <div className="tree-group-items" style={{ display: "flex", flexDirection: "column", gap: "4px", paddingLeft: "6px", marginTop: "4px" }}>
                     {items.map((repo) => {
-                      const isActive = activePath === repo.path;
+                      const isActive = normalizePath(activePath) === normalizePath(repo.path);
                       return (
                         <div
                           key={repo.path}

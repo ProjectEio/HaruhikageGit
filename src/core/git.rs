@@ -256,15 +256,47 @@ pub fn get_status() -> Result<Vec<GitFileStatus>> {
     if !is_git_repo() {
         return Ok(Vec::new());
     }
-    let output = git_output(&["status", "--porcelain"])?;
+
+    // Use `git -C <toplevel>` to guarantee paths are relative to the repo root,
+    // regardless of where the process CWD happens to be.
+    let root_out = Command::new("git")
+        .args(&["rev-parse", "--show-toplevel"])
+        .output()
+        .context("获取 git root 失败")?;
+    let root = if root_out.status.success() {
+        String::from_utf8_lossy(&root_out.stdout).trim().to_string()
+    } else {
+        bail!("无法获取 git 仓库根目录");
+    };
+
+    let out = Command::new("git")
+        .current_dir(&root)
+        .args(&["status", "--porcelain", "-u"])
+        .output()
+        .context("执行 git status 失败")?;
+    if !out.status.success() {
+        bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
+    }
+
+    let output = String::from_utf8_lossy(&out.stdout);
     let mut files = Vec::new();
+
     for line in output.lines() {
         if line.len() < 4 {
             continue;
         }
         let index_char = line.chars().nth(0).unwrap_or(' ');
-        let work_char = line.chars().nth(1).unwrap_or(' ');
-        let file_path = line[3..].trim().to_string();
+        let work_char  = line.chars().nth(1).unwrap_or(' ');
+        // Porcelain v1: "XY PATH" – path starts at byte offset 3
+        let raw_path = &line[3..];
+        let mut file_path = raw_path.trim().to_string();
+
+        // Remove surrounding quotes that git emits for paths with special chars
+        if file_path.starts_with('"') && file_path.ends_with('"') && file_path.len() >= 2 {
+            file_path = file_path[1..file_path.len() - 1].to_string();
+        }
+
+        eprintln!("DEBUG get_status: index='{}' work='{}' path='{}'", index_char, work_char, file_path);
 
         if index_char == '?' && work_char == '?' {
             files.push(GitFileStatus {
@@ -293,6 +325,7 @@ pub fn get_status() -> Result<Vec<GitFileStatus>> {
     }
     Ok(files)
 }
+
 
 pub fn add_files(specs: &[&str]) -> Result<()> {
     let mut args = vec!["add"];
