@@ -1,4 +1,135 @@
 use haruhikage_git::core::{git, ops};
+use std::path::PathBuf;
+use std::process::Command;
+
+// ─── Git Passthrough ─────────────────────────────────────────────────────────
+
+#[derive(serde::Serialize)]
+pub struct GitOutput {
+    pub stdout: String,
+    pub stderr: String,
+    pub success: bool,
+    pub code: i32,
+}
+
+/// 透传 git 命令，自动注入代理环境变量
+#[tauri::command]
+fn git_passthrough(args: Vec<String>, cwd: Option<String>) -> Result<GitOutput, String> {
+    use haruhikage_git::core::config::Config;
+    use haruhikage_git::core::proxy;
+
+    let cfg = Config::load().map_err(|e| e.to_string())?;
+    let proxy_url = proxy::resolve(&cfg.proxy);
+
+    let working_dir = match cwd {
+        Some(ref p) => PathBuf::from(p),
+        None => std::env::current_dir().unwrap_or_default(),
+    };
+
+    let mut cmd = Command::new("git");
+    cmd.args(&args).current_dir(&working_dir);
+
+    if let Some(ref url) = proxy_url {
+        cmd.env("HTTPS_PROXY", url)
+            .env("https_proxy", url)
+            .env("HTTP_PROXY", url)
+            .env("http_proxy", url);
+    }
+
+    let output = cmd.output().map_err(|e| format!("执行 git 失败: {}", e))?;
+
+    Ok(GitOutput {
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        success: output.status.success(),
+        code: output.status.code().unwrap_or(-1),
+    })
+}
+
+/// 检测文件夹是否为 git 仓库，并提取基础信息
+#[derive(serde::Serialize)]
+pub struct RepoDetectInfo {
+    pub is_git: bool,
+    pub name: String,
+    pub remote_url: Option<String>,
+    pub org: String,
+    pub current_branch: String,
+}
+
+#[tauri::command]
+fn detect_git_repo_info(path: String) -> Result<RepoDetectInfo, String> {
+    let p = std::path::Path::new(&path);
+    if !p.exists() || !p.is_dir() {
+        return Err("路径不存在或不是文件夹".to_string());
+    }
+
+    // folder name as default repo name
+    let name = p
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+
+    // check if git repo
+    let repo = match git2::Repository::discover(p) {
+        Ok(r) => r,
+        Err(_) => {
+            return Ok(RepoDetectInfo {
+                is_git: false,
+                name,
+                remote_url: None,
+                org: String::new(),
+                current_branch: String::new(),
+            });
+        }
+    };
+
+    // get remote URL
+    let remote_url = repo
+        .find_remote("origin")
+        .ok()
+        .and_then(|r| r.url().map(|s| s.to_string()));
+
+    // extract org from remote URL
+    let org = remote_url
+        .as_deref()
+        .and_then(|url| {
+            // handles https://github.com/Org/Repo.git or git@github.com:Org/Repo.git
+            let url = url.trim_end_matches(".git");
+            if let Some(rest) = url.strip_prefix("https://") {
+                let parts: Vec<&str> = rest.splitn(3, '/').collect();
+                if parts.len() >= 2 {
+                    return Some(parts[1].to_string());
+                }
+            } else if url.contains(':') {
+                // git@github.com:Org/Repo
+                let after_colon = url.split(':').nth(1)?;
+                let parts: Vec<&str> = after_colon.splitn(2, '/').collect();
+                if !parts.is_empty() {
+                    return Some(parts[0].to_string());
+                }
+            }
+            None
+        })
+        .unwrap_or_default();
+
+    // get current branch
+    let current_branch = repo
+        .head()
+        .ok()
+        .and_then(|h| h.shorthand().map(|s| s.to_string()))
+        .unwrap_or_default();
+
+    Ok(RepoDetectInfo {
+        is_git: true,
+        name,
+        remote_url,
+        org,
+        current_branch,
+    })
+}
+
+// ─── Status & Profile Commands ───────────────────────────────────────────────
 
 #[tauri::command]
 fn get_status_info() -> Result<ops::StatusInfo, String> {
@@ -20,71 +151,7 @@ fn remove_profile(alias: String) -> Result<(), String> {
     ops::remove_profile(&alias).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-fn get_git_status() -> Result<Vec<git::GitFileStatus>, String> {
-    ops::get_git_status().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn git_pull(alias: Option<String>, global: bool) -> Result<String, String> {
-    ops::git_pull(alias.as_deref(), global).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn git_fetch() -> Result<String, String> {
-    ops::git_fetch().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn git_checkout(target: String) -> Result<String, String> {
-    ops::git_checkout(&target).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn git_create_branch(name: String, start_point: Option<String>) -> Result<String, String> {
-    ops::git_create_branch(&name, start_point.as_deref()).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn git_delete_branch(name: String, force: bool) -> Result<String, String> {
-    ops::git_delete_branch(&name, force).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn get_git_branches() -> Result<Vec<String>, String> {
-    ops::get_git_branches().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn get_git_commits(limit: usize) -> Result<Vec<git::CommitInfo>, String> {
-    ops::get_git_commits(limit).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn get_sync_status() -> Result<git::SyncStatus, String> {
-    git::get_sync_status().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn git_stage_files(specs: Vec<String>) -> Result<(), String> {
-    ops::git_stage_files(specs).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn git_unstage_files(specs: Vec<String>) -> Result<(), String> {
-    ops::git_unstage_files(specs).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn git_commit(message: String, all: bool, profile: Option<String>) -> Result<(), String> {
-    ops::quick_commit(&message, all, profile.as_deref()).map_err(|e| e.to_string())
-}
-
-
-#[tauri::command]
-fn git_push() -> Result<String, String> {
-    ops::git_push().map_err(|e| e.to_string())
-}
+// ─── GitHub Auth Commands ─────────────────────────────────────────────────────
 
 #[tauri::command]
 fn github_request_code() -> Result<haruhikage_git::core::github::DeviceCode, String> {
@@ -113,6 +180,8 @@ fn github_pat_login(token: String, alias: String) -> Result<haruhikage_git::core
     ops::github_pat_login(&token, &alias).map_err(|e| e.to_string())
 }
 
+// ─── Proxy Commands ───────────────────────────────────────────────────────────
+
 #[tauri::command]
 fn get_proxy_status() -> Result<(haruhikage_git::core::config::ProxySettings, Option<String>), String> {
     ops::get_proxy_status().map_err(|e| e.to_string())
@@ -128,8 +197,7 @@ fn set_proxy_auto_detect(enabled: bool) -> Result<(), String> {
     ops::set_proxy_auto_detect(enabled).map_err(|e| e.to_string())
 }
 
-use std::path::PathBuf;
-use std::process::Command;
+// ─── Repository Management Commands ─────────────────────────────────────────
 
 #[tauri::command]
 fn get_managed_repositories() -> Result<Vec<haruhikage_git::core::config::ManagedRepository>, String> {
@@ -163,6 +231,8 @@ fn switch_active_repository(path: String) -> Result<ops::StatusInfo, String> {
     std::env::set_current_dir(p).map_err(|e| format!("切换工作目录失败: {}", e))?;
     ops::get_status().map_err(|e| e.to_string())
 }
+
+// ─── Utility Commands ─────────────────────────────────────────────────────────
 
 #[tauri::command]
 fn open_in_explorer(path: String) -> Result<(), String> {
@@ -206,69 +276,42 @@ fn open_in_vscode(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn get_remote_url() -> Result<String, String> {
-    git::get_remote_url("origin").map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn git_discard_changes() -> Result<(), String> {
-    git::discard_changes().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn get_file_diff(path: String) -> Result<String, String> {
-    git::file_diff(&path).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn get_git_root() -> Result<String, String> {
-    git::workdir_root().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 fn get_current_branch() -> Result<String, String> {
     git::current_branch().map_err(|e| e.to_string())
 }
+
+// ─── Tauri Entry Point ────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
+            // git passthrough
+            git_passthrough,
+            detect_git_repo_info,
+            // status & profiles
             get_status_info,
             switch_profile,
             add_profile,
             remove_profile,
-            get_git_status,
-            git_pull,
-            git_fetch,
-            git_checkout,
-            git_create_branch,
-            git_delete_branch,
-            get_git_branches,
-            get_git_commits,
-            git_stage_files,
-            git_unstage_files,
-            git_commit,
-            git_push,
+            // github auth
             github_request_code,
             github_complete_login,
             github_pat_login,
+            // proxy
             get_proxy_status,
             set_proxy_url,
             set_proxy_auto_detect,
+            // repository management
             get_managed_repositories,
             add_managed_repository,
             remove_managed_repository,
             switch_active_repository,
+            // utilities
             open_in_explorer,
             open_in_vscode,
-            get_remote_url,
-            git_discard_changes,
-            get_file_diff,
-            get_git_root,
-            get_sync_status,
-            get_current_branch
+            get_current_branch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

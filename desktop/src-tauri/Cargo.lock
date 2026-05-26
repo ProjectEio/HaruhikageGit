@@ -804,6 +804,7 @@ dependencies = [
 name = "desktop"
 version = "0.1.0"
 dependencies = [
+ "git2",
  "haruhikage-git",
  "serde",
  "serde_json",

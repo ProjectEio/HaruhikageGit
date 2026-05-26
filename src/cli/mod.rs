@@ -4,6 +4,8 @@ use colored::Colorize;
 
 use crate::core::{github::DeviceCode, ops};
 
+use anyhow::Context;
+
 // ── clap 结构定义 ────────────────────────────────────────────────────────────
 
 /// HaruhikageGit (hg) — 快速切换 git 账户与提交信息
@@ -12,11 +14,12 @@ use crate::core::{github::DeviceCode, ops};
     name = "hg",
     version,
     about = "快速切换 git 账户与提交信息",
-    long_about = None
+    long_about = None,
+    allow_external_subcommands = true
 )]
 struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -70,6 +73,10 @@ enum Commands {
         #[arg(short = 'p', long = "profile")]
         profile: Option<String>,
     },
+
+    /// 透传执行任意原生 Git 命令
+    #[command(external_subcommand)]
+    External(Vec<String>),
 }
 
 #[derive(Subcommand)]
@@ -129,7 +136,7 @@ enum ProfileCommands {
 enum ProxyCommands {
     /// 显示当前代理配置及实际生效的代理
     Status,
-    /// 开启自动检测系统代理（环境变量 / Windows 注册表）
+    /// 开启自动检测系统代理（环境变量 / Windows 系统代理）
     Auto,
     /// 关闭代理（自动检测 + 手动 URL 均清除）
     Off,
@@ -189,9 +196,9 @@ enum GithubCommands {
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Status => cmd_status()?,
-        Commands::Use { alias, global } => cmd_use(&alias, global)?,
-        Commands::Profile(sub) => match sub {
+        Some(Commands::Status) | None => cmd_status()?,
+        Some(Commands::Use { alias, global }) => cmd_use(&alias, global)?,
+        Some(Commands::Profile(sub)) => match sub {
             ProfileCommands::Add { alias, name, email, signing_key, apply, global } => {
                 cmd_profile_add(&alias, &name, &email, signing_key.as_deref(), apply, global)?
             }
@@ -204,17 +211,17 @@ pub fn run() -> Result<()> {
             ProfileCommands::Remove { alias } => cmd_profile_remove(&alias)?,
             ProfileCommands::List => cmd_profile_list()?,
         },
-        Commands::Install { dir, no_path } => {
+        Some(Commands::Install { dir, no_path }) => {
             cmd_install(dir.as_deref().map(std::path::PathBuf::from), !no_path)?
         }
-        Commands::Proxy(sub) => match sub {
+        Some(Commands::Proxy(sub)) => match sub {
             ProxyCommands::Status => cmd_proxy_status()?,
             ProxyCommands::Auto => cmd_proxy_auto()?,
             ProxyCommands::Off => cmd_proxy_off()?,
             ProxyCommands::Set { url } => cmd_proxy_set(&url)?,
         },
-        Commands::Publish => cmd_publish()?,
-        Commands::Github(sub) => match sub {
+        Some(Commands::Publish) => cmd_publish()?,
+        Some(Commands::Github(sub)) => match sub {
             GithubCommands::Login { alias, global } => cmd_github_login(&alias, global)?,
             GithubCommands::SetClient { client_id } => cmd_github_set_client(&client_id)?,
             GithubCommands::Pat { token, alias } => cmd_github_pat(&token, &alias)?,
@@ -222,13 +229,42 @@ pub fn run() -> Result<()> {
                 cmd_github_create(&name, org.as_deref(), private, &desc, &profile)?
             }
         },
-        Commands::Commit { message, all, profile } => {
+        Some(Commands::Commit { message, all, profile }) => {
             cmd_commit(&message, all, profile.as_deref())?
+        }
+        Some(Commands::External(args)) => {
+            cmd_external(args)?;
         }
     }
     Ok(())
 }
 
+fn cmd_external(args: Vec<String>) -> Result<()> {
+    use crate::core::config::Config;
+    use crate::core::proxy;
+    use std::process::Command;
+
+    let cfg = Config::load()?;
+    let proxy_url = proxy::resolve(&cfg.proxy);
+
+    let mut cmd = Command::new("git");
+    cmd.args(&args);
+
+    if let Some(ref url) = proxy_url {
+        cmd.env("HTTPS_PROXY", url)
+            .env("https_proxy", url)
+            .env("HTTP_PROXY", url)
+            .env("http_proxy", url);
+    }
+
+    let mut child = cmd.spawn().context("启动 git 进程失败，请确认系统已安装 git")?;
+    let status = child.wait().context("等待 git 进程结束失败")?;
+
+    if !status.success() {
+        std::process::exit(status.code().unwrap_or(1));
+    }
+    Ok(())
+}
 // ── 命令处理（彩色输出层） ────────────────────────────────────────────────────
 
 fn cmd_status() -> Result<()> {
