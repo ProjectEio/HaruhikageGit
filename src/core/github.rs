@@ -9,9 +9,7 @@ const DEVICE_CODE_URL: &str = "https://github.com/login/device/code";
 const TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
 const API_BASE: &str = "https://api.github.com";
 const SCOPES: &str = "repo read:user user:email admin:org workflow";
-const UA: &str = concat!("HaruhikageGit/", env!("CARGO_PKG_VERSION"));
-
-// ── 类型定义 ──────────────────────────────────────────────────────────────────
+const UA: &str = "HaruhikageGit";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DeviceCode {
@@ -58,10 +56,6 @@ pub struct RepoInfo {
     pub clone_url: String,
     pub ssh_url: String,
 }
-
-// ── Client ────────────────────────────────────────────────────────────────────
-
-/// GitHub API 客户端，持有带代理配置的 ureq::Agent
 pub struct Client {
     agent: ureq::Agent,
 }

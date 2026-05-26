@@ -5,9 +5,6 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-
-
-/// 设置 git config（local 或 global）
 pub fn set_config(key: &str, value: &str, global: bool) -> Result<()> {
     if global {
         let mut cfg = git2::Config::open_default().context("打开全局 git 配置失败")?;
@@ -135,8 +132,6 @@ pub fn current_branch() -> Result<String> {
     let head = repo.head().context("获取当前分支失败")?;
     Ok(head.shorthand().unwrap_or("HEAD").to_string())
 }
-
-/// 将凭据写入 git credential store（兼容任何已配置的 credential helper，会自动先 reject 掉旧凭据以防无法覆盖）
 pub fn credential_approve(host: &str, username: &str, password: &str) -> Result<()> {
     // 1. 先执行 git credential reject 擦除该 host 的旧凭据，确保新凭据能够覆盖
     let mut reject_child = Command::new("git")
