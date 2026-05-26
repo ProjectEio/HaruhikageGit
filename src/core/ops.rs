@@ -100,6 +100,12 @@ pub fn switch_profile(alias: &str, global: bool) -> Result<Profile> {
     if let Some(ref key) = profile.signing_key {
         git::set_config("user.signingkey", key, global)?;
     }
+    
+    // 如果 profile 关联了 github 登录 token，自动更新 credential helper 里的凭据
+    if let (Some(token), Some(github_user)) = (&profile.token, &profile.github_user) {
+        let _ = git::credential_approve("github.com", github_user, token);
+    }
+    
     Ok(profile)
 }
 

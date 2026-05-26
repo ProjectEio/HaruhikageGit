@@ -8,7 +8,7 @@ use crate::core::config::ProxySettings;
 const DEVICE_CODE_URL: &str = "https://github.com/login/device/code";
 const TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
 const API_BASE: &str = "https://api.github.com";
-const SCOPES: &str = "repo read:user user:email admin:org";
+const SCOPES: &str = "repo read:user user:email admin:org workflow";
 const UA: &str = concat!("HaruhikageGit/", env!("CARGO_PKG_VERSION"));
 
 // ── 类型定义 ──────────────────────────────────────────────────────────────────

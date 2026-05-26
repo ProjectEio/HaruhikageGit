@@ -136,8 +136,25 @@ pub fn current_branch() -> Result<String> {
     Ok(head.shorthand().unwrap_or("HEAD").to_string())
 }
 
-/// 将凭据写入 git credential store（兼容任何已配置的 credential helper）
+/// 将凭据写入 git credential store（兼容任何已配置的 credential helper，会自动先 reject 掉旧凭据以防无法覆盖）
 pub fn credential_approve(host: &str, username: &str, password: &str) -> Result<()> {
+    // 1. 先执行 git credential reject 擦除该 host 的旧凭据，确保新凭据能够覆盖
+    let mut reject_child = Command::new("git")
+        .args(["credential", "reject"])
+        .stdin(Stdio::piped())
+        .spawn()
+        .context("执行 git credential reject 失败")?;
+
+    if let Some(mut stdin) = reject_child.stdin.take() {
+        write!(
+            stdin,
+            "protocol=https\nhost={}\n\n",
+            host
+        )?;
+    }
+    let _ = reject_child.wait(); // 忽略 reject 的错误，即使原本没有旧凭据也可以继续
+
+    // 2. 执行 git credential approve 写入新凭据
     let mut child = Command::new("git")
         .args(["credential", "approve"])
         .stdin(Stdio::piped())
