@@ -19,6 +19,7 @@ anyhow = "1"
 colored = "2"
 dirs = "5"
 ureq = { version = "2", features = ["json"] }
+git2 = "0.18"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

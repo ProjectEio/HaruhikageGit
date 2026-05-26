@@ -1,67 +1,69 @@
 use anyhow::{bail, Context, Result};
+use git2::{BranchType, Cred, FetchOptions, IndexAddOption, PushOptions, RemoteCallbacks, Repository, Status, StatusOptions};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
-use std::process::{Command, Output, Stdio};
+use std::path::Path;
+use std::process::{Command, Stdio};
 
-fn run_git(args: &[&str]) -> Result<Output> {
-    Command::new("git")
-        .args(args)
-        .output()
-        .context("执行 git 命令失败，请确认 git 已安装并在 PATH 中")
-}
 
-fn git_output(args: &[&str]) -> Result<String> {
-    let out = run_git(args)?;
-    if out.status.success() {
-        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-        bail!("{}", stderr)
-    }
-}
 
 /// 设置 git config（local 或 global）
 pub fn set_config(key: &str, value: &str, global: bool) -> Result<()> {
-    let scope = if global { "--global" } else { "--local" };
-    let out = run_git(&["config", scope, key, value])?;
-    if out.status.success() {
-        Ok(())
+    if global {
+        let mut cfg = git2::Config::open_default().context("打开全局 git 配置失败")?;
+        cfg.set_str(key, value).context("写入全局 git 配置失败")
     } else {
-        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-        bail!("{}", stderr)
+        let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+        let mut cfg = repo.config().context("打开仓库 git 配置失败")?;
+        cfg.set_str(key, value).context("写入仓库 git 配置失败")
     }
 }
 
 /// 获取指定作用域的 git config 值
 pub fn get_config_scoped(key: &str, global: bool) -> Option<String> {
-    let scope = if global { "--global" } else { "--local" };
-    git_output(&["config", scope, key])
-        .ok()
-        .filter(|s| !s.is_empty())
+    let value = if global {
+        git2::Config::open_default().ok()?.get_string(key).ok()
+    } else {
+        Repository::discover(".").ok()?.config().ok()?.get_string(key).ok()
+    };
+    value.filter(|s| !s.is_empty())
 }
 
 /// 判断当前目录是否在 git 仓库中
 pub fn is_git_repo() -> bool {
-    run_git(&["rev-parse", "--git-dir"])
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    Repository::discover(".").is_ok()
 }
 
 /// 执行 git commit
 pub fn commit(message: &str, all: bool) -> Result<()> {
-    let mut args = vec!["commit", "-m", message];
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+    let workdir = repo.workdir().context("裸仓库无法提交")?.to_path_buf();
+    let mut index = repo.index().context("打开 git index 失败")?;
+
     if all {
-        args.push("-a");
+        let mut opts = StatusOptions::new();
+        opts.include_untracked(false).recurse_untracked_dirs(true);
+        for entry in repo.statuses(Some(&mut opts))?.iter() {
+            let Some(path) = entry.path() else { continue; };
+            let status = entry.status();
+            if status.contains(Status::WT_DELETED) {
+                let _ = index.remove_path(Path::new(path));
+            } else if status.intersects(Status::WT_MODIFIED | Status::WT_RENAMED | Status::WT_TYPECHANGE) {
+                index.add_path(Path::new(path)).with_context(|| format!("stage 文件失败: {}", path))?;
+            }
+        }
     }
-    let status = Command::new("git")
-        .args(&args)
-        .status()
-        .context("执行 git commit 失败")?;
-    if status.success() {
-        Ok(())
-    } else {
-        bail!("git commit 返回非零退出码")
-    }
+    index.write().context("写入 git index 失败")?;
+
+    let tree_oid = index.write_tree().context("写入 git tree 失败")?;
+    let tree = repo.find_tree(tree_oid)?;
+    let sig = repo.signature().context("读取提交身份失败，请先配置 user.name 和 user.email")?;
+    let parent = repo.head().ok().and_then(|h| h.target()).and_then(|oid| repo.find_commit(oid).ok());
+    let parents: Vec<&git2::Commit<'_>> = parent.iter().collect();
+    repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)
+        .context("创建 git commit 失败")?;
+    let _ = workdir;
+    Ok(())
 }
 
 /// 获取当前仓库或全局的用户 name/email
@@ -73,15 +75,12 @@ pub fn current_identity(global: bool) -> (Option<String>, Option<String>) {
 
 /// 添加或更新 remote（已存在则 set-url）
 pub fn add_remote(name: &str, url: &str) -> Result<()> {
-    let out = run_git(&["remote", "add", name, url])?;
-    if out.status.success() {
-        return Ok(());
-    }
-    let out = run_git(&["remote", "set-url", name, url])?;
-    if out.status.success() {
-        Ok(())
-    } else {
-        bail!("{}", String::from_utf8_lossy(&out.stderr).trim())
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+    match repo.remote(name, url) {
+        Ok(_) => Ok(()),
+        Err(_) => {
+            repo.remote_set_url(name, url).context("设置 remote URL 失败")
+        }
     }
 }
 
@@ -93,35 +92,48 @@ pub fn push(
     proxy_url: Option<&str>,
     auth_url: Option<&str>,
 ) -> Result<()> {
-    let mut args = vec!["push"];
-    if set_upstream {
-        args.push("-u");
-    }
-    let target = auth_url.unwrap_or(remote);
-    args.push(target);
-    args.push(branch);
-    let mut cmd = Command::new("git");
-    cmd.args(&args);
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(|_url, username_from_url, _allowed| {
+        Cred::credential_helper(&repo.config()?, _url, username_from_url)
+            .or_else(|_| Cred::default())
+    });
+    let mut options = PushOptions::new();
+    options.remote_callbacks(callbacks);
     if let Some(proxy) = proxy_url {
-        cmd.env("HTTPS_PROXY", proxy).env("HTTP_PROXY", proxy);
+        let mut p = git2::ProxyOptions::new();
+        p.url(proxy);
+        options.proxy_options(p);
     }
-    let status = cmd.status().context("执行 git push 失败")?;
-    if status.success() {
-        Ok(())
-    } else {
-        bail!("git push 失败")
+    let mut remote_obj = match auth_url {
+        Some(url) => repo.remote_anonymous(url)?,
+        None => repo.find_remote(remote).with_context(|| format!("找不到 remote: {}", remote))?,
+    };
+    let refspec = format!("refs/heads/{0}:refs/heads/{0}", branch);
+    remote_obj.push(&[refspec.as_str()], Some(&mut options)).context("git push 失败")?;
+    if set_upstream && auth_url.is_none() {
+        if let Ok(mut b) = repo.find_branch(branch, BranchType::Local) {
+            b.set_upstream(Some(&format!("{}/{}", remote, branch))).ok();
+        }
     }
+    Ok(())
 }
 
 /// 获取 remote 的 URL
 pub fn get_remote_url(remote: &str) -> Result<String> {
-    git_output(&["remote", "get-url", remote]).context("获取 remote URL 失败")
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+    repo.find_remote(remote)
+        .with_context(|| format!("找不到 remote: {}", remote))?
+        .url()
+        .map(|s| s.to_string())
+        .ok_or_else(|| anyhow::anyhow!("remote '{}' 没有 URL", remote))
 }
 
 /// 获取当前分支名
 pub fn current_branch() -> Result<String> {
-    git_output(&["rev-parse", "--abbrev-ref", "HEAD"])
-        .context("获取当前分支失败")
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+    let head = repo.head().context("获取当前分支失败")?;
+    Ok(head.shorthand().unwrap_or("HEAD").to_string())
 }
 
 /// 将凭据写入 git credential store（兼容任何已配置的 credential helper）
@@ -172,62 +184,90 @@ pub struct SyncStatus {
 }
 
 pub fn pull(remote: &str, branch: &str, proxy_url: Option<&str>) -> Result<String> {
-    let mut cmd = Command::new("git");
-    cmd.args(&["pull", remote, branch]);
-    if let Some(proxy) = proxy_url {
-        cmd.env("HTTPS_PROXY", proxy).env("HTTP_PROXY", proxy);
+    fetch(remote, proxy_url)?;
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+    let remote_ref = format!("refs/remotes/{}/{}", remote, branch);
+    let annotated = repo.find_annotated_commit(repo.refname_to_id(&remote_ref)?)?;
+    let (analysis, _) = repo.merge_analysis(&[&annotated])?;
+    if analysis.is_up_to_date() {
+        return Ok("Already up to date".to_string());
     }
-    let out = cmd.output().context("执行 git pull 失败")?;
-    if out.status.success() {
-        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
-    } else {
-        bail!("{}", String::from_utf8_lossy(&out.stderr).trim())
+    if analysis.is_fast_forward() {
+        let refname = format!("refs/heads/{}", branch);
+        let mut reference = repo.find_reference(&refname)?;
+        reference.set_target(annotated.id(), "Fast-Forward")?;
+        repo.set_head(&refname)?;
+        repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))?;
+        return Ok("Fast-forward 完成".to_string());
     }
+    bail!("当前分支需要合并提交，请使用完整 Git 客户端处理")
 }
 
 pub fn fetch(remote: &str, proxy_url: Option<&str>) -> Result<String> {
-    let mut cmd = Command::new("git");
-    cmd.args(&["fetch", remote]);
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(|url, username_from_url, _allowed| {
+        Cred::credential_helper(&repo.config()?, url, username_from_url)
+            .or_else(|_| Cred::default())
+    });
+    let mut options = FetchOptions::new();
+    options.remote_callbacks(callbacks);
     if let Some(proxy) = proxy_url {
-        cmd.env("HTTPS_PROXY", proxy).env("HTTP_PROXY", proxy);
+        let mut p = git2::ProxyOptions::new();
+        p.url(proxy);
+        options.proxy_options(p);
     }
-    let out = cmd.output().context("执行 git fetch 失败")?;
-    if out.status.success() {
-        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
-    } else {
-        bail!("{}", String::from_utf8_lossy(&out.stderr).trim())
-    }
+    let mut remote_obj = repo.find_remote(remote).with_context(|| format!("找不到 remote: {}", remote))?;
+    remote_obj.fetch(&[] as &[&str], Some(&mut options), None).context("git fetch 失败")?;
+    Ok("Fetch 完成".to_string())
 }
 
 pub fn checkout(target: &str) -> Result<String> {
-    git_output(&["checkout", target]).context("执行 git checkout 失败")
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+    let obj = repo.revparse_single(target).with_context(|| format!("找不到引用: {}", target))?;
+    repo.checkout_tree(&obj, None).context("检出工作区失败")?;
+    if let Some(commit) = obj.as_commit() {
+        if repo.find_branch(target, BranchType::Local).is_ok() {
+            repo.set_head(&format!("refs/heads/{}", target))?;
+        } else {
+            repo.set_head_detached(commit.id())?;
+        }
+    }
+    Ok(format!("已切换到 {}", target))
 }
 
 pub fn create_branch(name: &str, start_point: Option<&str>) -> Result<String> {
-    let mut args = vec!["branch", name];
-    if let Some(sp) = start_point {
-        args.push(sp);
-    }
-    git_output(&args).context("创建分支失败")
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+    let obj = match start_point {
+        Some(sp) => repo.revparse_single(sp)?,
+        None => repo.head()?.peel(git2::ObjectType::Commit)?,
+    };
+    let commit = obj.into_commit().map_err(|_| anyhow::anyhow!("起点不是 commit"))?;
+    repo.branch(name, &commit, false).context("创建分支失败")?;
+    Ok(format!("已创建分支 {}", name))
 }
 
 pub fn delete_branch(name: &str, force: bool) -> Result<String> {
-    let flag = if force { "-D" } else { "-d" };
-    git_output(&["branch", flag, name]).context("删除分支失败")
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+    let mut branch = repo.find_branch(name, BranchType::Local).context("找不到本地分支")?;
+    let _ = force;
+    branch.delete().context("删除分支失败")?;
+    Ok(format!("已删除分支 {}", name))
 }
 
 pub fn get_branches() -> Result<Vec<String>> {
     if !is_git_repo() {
         return Ok(Vec::new());
     }
-    let out = git_output(&["branch", "-a"])?;
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
     let mut branches = Vec::new();
-    for line in out.lines() {
-        let cleaned = line.trim().trim_start_matches('*').trim().to_string();
-        if !cleaned.is_empty() {
-            branches.push(cleaned);
+    for item in repo.branches(Some(BranchType::Local))? {
+        let (branch, _) = item?;
+        if let Some(name) = branch.name()? {
+            branches.push(name.to_string());
         }
     }
+    branches.sort();
     Ok(branches)
 }
 
@@ -235,36 +275,31 @@ pub fn get_log(limit: usize) -> Result<Vec<CommitInfo>> {
     if !is_git_repo() {
         bail!("当前目录不是 git 仓库");
     }
-    let limit_str = limit.to_string();
-    let out = git_output(&[
-        "log",
-        &format!("-n{}", limit_str),
-        "--pretty=format:%H|%an|%ae|%ad|%s|%D",
-    ])?;
-    if out.is_empty() {
-        return Ok(Vec::new());
-    }
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+    let mut revwalk = repo.revwalk()?;
+    revwalk.push_head()?;
+    revwalk.set_sorting(git2::Sort::TIME)?;
     let mut commits = Vec::new();
-    let mut is_remote_reached = false;
-    
-    for line in out.lines() {
-        let parts: Vec<&str> = line.splitn(6, '|').collect();
-        if parts.len() >= 5 {
-            let refs = if parts.len() == 6 { parts[5] } else { "" };
-            // If we hit a remote tracking branch, this and all older commits are remote
-            if refs.contains("origin/") || refs.contains("upstream/") {
-                is_remote_reached = true;
-            }
-            
-            commits.push(CommitInfo {
-                hash: parts[0].to_string(),
-                author: parts[1].to_string(),
-                email: parts[2].to_string(),
-                date: parts[3].to_string(),
-                message: parts[4].to_string(),
-                is_remote: is_remote_reached,
-            });
-        }
+    let upstream_oid = repo.head().ok()
+        .and_then(|h| h.shorthand().map(str::to_string))
+        .and_then(|name| repo.find_branch(&name, BranchType::Local).ok())
+        .and_then(|b| b.upstream().ok())
+        .and_then(|b| b.get().target());
+    for oid in revwalk.take(limit).flatten() {
+        let commit = repo.find_commit(oid)?;
+        let author = commit.author();
+        let time = commit.time().seconds().to_string();
+        let is_remote = upstream_oid
+            .map(|up| repo.graph_descendant_of(up, oid).unwrap_or(false))
+            .unwrap_or(false);
+        commits.push(CommitInfo {
+            hash: oid.to_string(),
+            author: author.name().unwrap_or("").to_string(),
+            email: author.email().unwrap_or("").to_string(),
+            date: time,
+            message: commit.summary().unwrap_or("").to_string(),
+            is_remote,
+        });
     }
     Ok(commits)
 }
@@ -273,36 +308,20 @@ pub fn get_sync_status() -> Result<SyncStatus> {
     if !is_git_repo() {
         return Ok(SyncStatus { ahead: 0, behind: 0, has_upstream: false });
     }
-    let root_out = Command::new("git")
-        .args(&["rev-parse", "--show-toplevel"])
-        .output()
-        .context("获取 git root 失败")?;
-    let root = if root_out.status.success() {
-        String::from_utf8_lossy(&root_out.stdout).trim().to_string()
-    } else {
-        bail!("无法获取 git 仓库根目录");
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+    let Some(local_oid) = repo.head().ok().and_then(|h| h.target()) else {
+        return Ok(SyncStatus { ahead: 0, behind: 0, has_upstream: false });
     };
-
-    let out = Command::new("git")
-        .current_dir(&root)
-        .args(&["rev-list", "--left-right", "--count", "HEAD...@{u}"])
-        .output();
-    
-    match out {
-        Ok(output) if output.status.success() => {
-            let str_out = String::from_utf8_lossy(&output.stdout);
-            let parts: Vec<&str> = str_out.split_whitespace().collect();
-            if parts.len() == 2 {
-                let ahead = parts[0].parse().unwrap_or(0);
-                let behind = parts[1].parse().unwrap_or(0);
-                Ok(SyncStatus { ahead, behind, has_upstream: true })
-            } else {
-                Ok(SyncStatus { ahead: 0, behind: 0, has_upstream: false })
-            }
-        },
-        _ => {
-            Ok(SyncStatus { ahead: 0, behind: 0, has_upstream: false })
-        }
+    let upstream_oid = repo.head().ok()
+        .and_then(|h| h.shorthand().map(str::to_string))
+        .and_then(|name| repo.find_branch(&name, BranchType::Local).ok())
+        .and_then(|b| b.upstream().ok())
+        .and_then(|b| b.get().target());
+    if let Some(remote_oid) = upstream_oid {
+        let (ahead, behind) = repo.graph_ahead_behind(local_oid, remote_oid)?;
+        Ok(SyncStatus { ahead: ahead as u32, behind: behind as u32, has_upstream: true })
+    } else {
+        Ok(SyncStatus { ahead: 0, behind: 0, has_upstream: false })
     }
 }
 
@@ -311,70 +330,29 @@ pub fn get_status() -> Result<Vec<GitFileStatus>> {
         return Ok(Vec::new());
     }
 
-    // Use `git -C <toplevel>` to guarantee paths are relative to the repo root,
-    // regardless of where the process CWD happens to be.
-    let root_out = Command::new("git")
-        .args(&["rev-parse", "--show-toplevel"])
-        .output()
-        .context("获取 git root 失败")?;
-    let root = if root_out.status.success() {
-        String::from_utf8_lossy(&root_out.stdout).trim().to_string()
-    } else {
-        bail!("无法获取 git 仓库根目录");
-    };
-
-    let out = Command::new("git")
-        .current_dir(&root)
-        .args(&["status", "--porcelain", "-u"])
-        .output()
-        .context("执行 git status 失败")?;
-    if !out.status.success() {
-        bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
-    }
-
-    let output = String::from_utf8_lossy(&out.stdout);
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+    let mut opts = StatusOptions::new();
+    opts.include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .renames_head_to_index(true)
+        .renames_index_to_workdir(true);
+    let statuses = repo.statuses(Some(&mut opts)).context("读取 git status 失败")?;
     let mut files = Vec::new();
-
-    for line in output.lines() {
-        if line.len() < 4 {
+    for entry in statuses.iter() {
+        let Some(path) = entry.path().map(str::to_string) else { continue; };
+        let s = entry.status();
+        if s.contains(Status::WT_NEW) {
+            files.push(GitFileStatus { path, status: "untracked".to_string() });
             continue;
         }
-        let index_char = line.chars().nth(0).unwrap_or(' ');
-        let work_char  = line.chars().nth(1).unwrap_or(' ');
-        // Porcelain v1: "XY PATH" – path starts at byte offset 3
-        let raw_path = &line[3..];
-        let mut file_path = raw_path.trim().to_string();
-
-        // Remove surrounding quotes that git emits for paths with special chars
-        if file_path.starts_with('"') && file_path.ends_with('"') && file_path.len() >= 2 {
-            file_path = file_path[1..file_path.len() - 1].to_string();
+        if s.intersects(Status::INDEX_NEW | Status::INDEX_MODIFIED | Status::INDEX_DELETED | Status::INDEX_RENAMED | Status::INDEX_TYPECHANGE) {
+            files.push(GitFileStatus { path: path.clone(), status: "staged".to_string() });
         }
-
-        eprintln!("DEBUG get_status: index='{}' work='{}' path='{}'", index_char, work_char, file_path);
-
-        if index_char == '?' && work_char == '?' {
-            files.push(GitFileStatus {
-                path: file_path,
-                status: "untracked".to_string(),
-            });
-        } else {
-            if index_char != ' ' {
-                files.push(GitFileStatus {
-                    path: file_path.clone(),
-                    status: "staged".to_string(),
-                });
-            }
-            if work_char != ' ' {
-                let status_str = match work_char {
-                    'M' => "modified",
-                    'D' => "deleted",
-                    _ => "unstaged",
-                };
-                files.push(GitFileStatus {
-                    path: file_path,
-                    status: status_str.to_string(),
-                });
-            }
+        if s.intersects(Status::WT_MODIFIED | Status::WT_RENAMED | Status::WT_TYPECHANGE) {
+            files.push(GitFileStatus { path: path.clone(), status: "modified".to_string() });
+        }
+        if s.contains(Status::WT_DELETED) {
+            files.push(GitFileStatus { path, status: "deleted".to_string() });
         }
     }
     Ok(files)
@@ -382,23 +360,96 @@ pub fn get_status() -> Result<Vec<GitFileStatus>> {
 
 
 pub fn add_files(specs: &[&str]) -> Result<()> {
-    let mut args = vec!["add"];
-    args.extend(specs);
-    let out = run_git(&args)?;
-    if out.status.success() {
-        Ok(())
-    } else {
-        bail!("{}", String::from_utf8_lossy(&out.stderr).trim())
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+    let mut index = repo.index().context("打开 git index 失败")?;
+    for spec in specs {
+        index.add_all([*spec], IndexAddOption::DEFAULT, None)
+            .or_else(|_| index.add_path(Path::new(spec)))
+            .with_context(|| format!("stage 文件失败: {}", spec))?;
     }
+    index.write().context("写入 git index 失败")
 }
 
 pub fn reset_files(specs: &[&str]) -> Result<()> {
-    let mut args = vec!["reset"];
-    args.extend(specs);
-    let out = run_git(&args)?;
-    if out.status.success() {
-        Ok(())
-    } else {
-        bail!("{}", String::from_utf8_lossy(&out.stderr).trim())
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+    let obj = repo.head()?.peel(git2::ObjectType::Commit)?;
+    let paths: Vec<&Path> = specs.iter().map(Path::new).collect();
+    repo.reset_default(Some(&obj), paths).context("取消暂存失败")?;
+    Ok(())
+}
+
+pub fn workdir_root() -> Result<String> {
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+    repo.workdir()
+        .map(|p| p.display().to_string())
+        .ok_or_else(|| anyhow::anyhow!("裸仓库没有工作区"))
+}
+
+pub fn file_diff(path: &str) -> Result<String> {
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+    let mut opts = git2::DiffOptions::new();
+    opts.pathspec(path);
+    let tree = repo.head().ok()
+        .and_then(|h| h.peel_to_tree().ok());
+    let diff = repo.diff_tree_to_workdir_with_index(tree.as_ref(), Some(&mut opts))?;
+    let mut out = Vec::new();
+    diff.print(git2::DiffFormat::Patch, |_delta, _hunk, line| {
+        out.extend_from_slice(line.origin().encode_utf8(&mut [0; 4]).as_bytes());
+        out.extend_from_slice(line.content());
+        true
+    })?;
+    let text = String::from_utf8_lossy(&out).to_string();
+    if !text.is_empty() {
+        return Ok(text);
     }
+    let workdir = repo.workdir().context("裸仓库没有工作区")?;
+    let clean_path = path.trim_matches('"').trim_matches('\'');
+    let abs = workdir.join(clean_path);
+    if abs.exists() && abs.is_file() {
+        let content = std::fs::read_to_string(&abs).unwrap_or_else(|_| "无法读取该文件内容".to_string());
+        let mut synthetic = format!("--- /dev/null\n+++ b/{}\n@@ -0,0 +1,{} @@\n", clean_path, content.lines().count());
+        for line in content.lines() {
+            synthetic.push_str(&format!("+{}\n", line));
+        }
+        Ok(synthetic)
+    } else {
+        Ok(format!("文件为空，不存在，或已被删除: {}", abs.display()))
+    }
+}
+
+/// 丢弃当前工作区的所有未提交更改（包括修改、删除和未跟踪的文件）
+pub fn discard_changes() -> Result<()> {
+    let repo = Repository::discover(".").context("当前目录不是 git 仓库")?;
+    
+    // 1. 重置 HEAD（等同于 reset --hard HEAD）
+    if let Ok(head) = repo.head() {
+        let obj = head.peel(git2::ObjectType::Commit).context("HEAD 不是 commit")?;
+        let mut checkout_opts = git2::build::CheckoutBuilder::new();
+        checkout_opts.force();
+        repo.reset(&obj, git2::ResetType::Hard, Some(&mut checkout_opts)).context("重置 HEAD 失败")?;
+    }
+    
+    // 2. 清理未跟踪的文件和文件夹（等同于 clean -df）
+    let mut status_opts = StatusOptions::new();
+    status_opts.include_untracked(true)
+        .recurse_untracked_dirs(true);
+    let statuses = repo.statuses(Some(&mut status_opts)).context("读取 git status 失败")?;
+    let workdir = repo.workdir().context("裸仓库没有工作区")?;
+    
+    for entry in statuses.iter() {
+        let status = entry.status();
+        if status.contains(Status::WT_NEW) {
+            if let Some(path_str) = entry.path() {
+                let full_path = workdir.join(path_str);
+                if full_path.exists() {
+                    if full_path.is_file() {
+                        let _ = std::fs::remove_file(&full_path);
+                    } else if full_path.is_dir() {
+                        let _ = std::fs::remove_dir_all(&full_path);
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }

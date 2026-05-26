@@ -22,14 +22,7 @@ fn remove_profile(alias: String) -> Result<(), String> {
 
 #[tauri::command]
 fn get_git_status() -> Result<Vec<git::GitFileStatus>, String> {
-    let result = ops::get_git_status().map_err(|e| e.to_string());
-    if let Ok(ref files) = result {
-        for f in files {
-            let bytes: Vec<u8> = f.path.bytes().take(10).collect();
-            eprintln!("[get_git_status] path='{}' bytes={:?}", f.path, bytes);
-        }
-    }
-    result
+    ops::get_git_status().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -74,88 +67,17 @@ fn get_sync_status() -> Result<git::SyncStatus, String> {
 
 #[tauri::command]
 fn git_stage_files(specs: Vec<String>) -> Result<(), String> {
-    // Resolve git root so paths relative to the repo root always work
-    let root_out = Command::new("git")
-        .args(&["rev-parse", "--show-toplevel"])
-        .output()
-        .map_err(|e| e.to_string())?;
-    let root = if root_out.status.success() {
-        std::path::PathBuf::from(String::from_utf8_lossy(&root_out.stdout).trim())
-    } else {
-        std::env::current_dir().unwrap_or_default()
-    };
-    let mut args = vec!["add", "--"];
-    let spec_refs: Vec<&str> = specs.iter().map(|s| s.as_str()).collect();
-    args.extend(spec_refs.iter().copied());
-    let out = Command::new("git")
-        .current_dir(&root)
-        .args(&args)
-        .output()
-        .map_err(|e| e.to_string())?;
-    if out.status.success() {
-        Ok(())
-    } else {
-        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
-    }
+    ops::git_stage_files(specs).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn git_unstage_files(specs: Vec<String>) -> Result<(), String> {
-    let root_out = Command::new("git")
-        .args(&["rev-parse", "--show-toplevel"])
-        .output()
-        .map_err(|e| e.to_string())?;
-    let root = if root_out.status.success() {
-        std::path::PathBuf::from(String::from_utf8_lossy(&root_out.stdout).trim())
-    } else {
-        std::env::current_dir().unwrap_or_default()
-    };
-    let mut args = vec!["reset", "HEAD", "--"];
-    let spec_refs: Vec<&str> = specs.iter().map(|s| s.as_str()).collect();
-    args.extend(spec_refs.iter().copied());
-    let out = Command::new("git")
-        .current_dir(&root)
-        .args(&args)
-        .output()
-        .map_err(|e| e.to_string())?;
-    if out.status.success() {
-        Ok(())
-    } else {
-        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
-    }
+    ops::git_unstage_files(specs).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn git_commit(message: String, all: bool, profile: Option<String>) -> Result<(), String> {
-    // Resolve git root before committing
-    let root_out = Command::new("git")
-        .args(&["rev-parse", "--show-toplevel"])
-        .output()
-        .map_err(|e| e.to_string())?;
-    let root = if root_out.status.success() {
-        std::path::PathBuf::from(String::from_utf8_lossy(&root_out.stdout).trim())
-    } else {
-        std::env::current_dir().unwrap_or_default()
-    };
-    // Optionally switch profile
-    if let Some(alias) = profile.as_deref() {
-        haruhikage_git::core::ops::switch_profile(alias, false)
-            .map_err(|e| e.to_string())?;
-    }
-    let mut args = vec!["commit", "-m", message.as_str()];
-    if all {
-        args.push("-a");
-    }
-    let status = Command::new("git")
-        .current_dir(&root)
-        .args(&args)
-        .status()
-        .map_err(|e| e.to_string())?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err("git commit 返回非零退出码".to_string())
-    }
+    ops::quick_commit(&message, all, profile.as_deref()).map_err(|e| e.to_string())
 }
 
 
@@ -285,121 +207,27 @@ fn open_in_vscode(path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn get_remote_url() -> Result<String, String> {
-    let cwd = std::env::current_dir().unwrap_or_default();
-    let out = Command::new("git")
-        .current_dir(&cwd)
-        .args(&["remote", "get-url", "origin"])
-        .output()
-        .map_err(|e| e.to_string())?;
-    if out.status.success() {
-        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
-    } else {
-        Err("没有配置远程源 origin".to_string())
-    }
+    git::get_remote_url("origin").map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn git_discard_changes() -> Result<(), String> {
-    let cwd = std::env::current_dir().unwrap_or_default();
-    let out1 = Command::new("git")
-        .current_dir(&cwd)
-        .args(&["reset", "--hard", "HEAD"])
-        .output()
-        .map_err(|e| e.to_string())?;
-    if !out1.status.success() {
-        return Err(String::from_utf8_lossy(&out1.stderr).trim().to_string());
-    }
-    let out2 = Command::new("git")
-        .current_dir(&cwd)
-        .args(&["clean", "-df"])
-        .output()
-        .map_err(|e| e.to_string())?;
-    if !out2.status.success() {
-        return Err(String::from_utf8_lossy(&out2.stderr).trim().to_string());
-    }
-    Ok(())
+    git::discard_changes().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn get_file_diff(path: String) -> Result<String, String> {
-    let path_bytes: Vec<u8> = path.bytes().take(15).collect();
-    eprintln!("[get_file_diff] received path='{}' bytes={:?}", path, path_bytes);
-
-    // Get the actual git root to resolve paths correctly since `git status --porcelain` 
-    // returns paths relative to the git root.
-    let git_root_out = Command::new("git")
-        .args(&["rev-parse", "--show-toplevel"])
-        .output()
-        .map_err(|e| e.to_string())?;
-    
-    let cwd = if git_root_out.status.success() {
-        std::path::PathBuf::from(String::from_utf8_lossy(&git_root_out.stdout).trim())
-    } else {
-        std::env::current_dir().unwrap_or_default()
-    };
-    
-    // Remove potential surrounding quotes from git status porcelain output
-    let clean_path = path.trim_matches('"').trim_matches('\'').to_string();
-    eprintln!("[get_file_diff] clean_path='{}' cwd='{}'", clean_path, cwd.display());
-    
-    let out = Command::new("git")
-        .current_dir(&cwd)
-        .args(&["diff", "HEAD", "--", &clean_path])
-        .output()
-        .map_err(|e| e.to_string())?;
-    let diff = String::from_utf8_lossy(&out.stdout).to_string();
-    
-    println!("DEBUG get_file_diff: path='{}', clean_path='{}', cwd='{}', diff_len={}", path, clean_path, cwd.display(), diff.len());
-    
-    if !diff.is_empty() {
-        Ok(diff)
-    } else {
-        let p = std::path::Path::new(&clean_path);
-        let abs_p = if p.is_relative() {
-            cwd.join(p)
-        } else {
-            p.to_path_buf()
-        };
-        
-        println!("DEBUG get_file_diff: abs_p='{}', exists={}", abs_p.display(), abs_p.exists());
-        
-        if abs_p.exists() && abs_p.is_file() {
-            let content = std::fs::read_to_string(&abs_p).unwrap_or_else(|_| "无法读取该文件内容".to_string());
-            let mut diff_mock = format!("--- /dev/null\n+++ b/{}\n@@ -0,0 +1,{} @@\n", clean_path, content.lines().count());
-            for line in content.lines() {
-                diff_mock.push_str(&format!("+{}\n", line));
-            }
-            Ok(diff_mock)
-        } else {
-            Ok(format!("文件为空，不存在，或已被删除: {}", abs_p.display()))
-        }
-    }
+    git::file_diff(&path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn get_git_root() -> Result<String, String> {
-    let out = Command::new("git")
-        .args(&["rev-parse", "--show-toplevel"])
-        .output()
-        .map_err(|e| e.to_string())?;
-    if out.status.success() {
-        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
-    } else {
-        Err("Not in a git repository".to_string())
-    }
+    git::workdir_root().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn get_current_branch() -> Result<String, String> {
-    let out = Command::new("git")
-        .args(&["rev-parse", "--abbrev-ref", "HEAD"])
-        .output()
-        .map_err(|e| e.to_string())?;
-    if out.status.success() {
-        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
-    } else {
-        Err("Failed to get current branch".to_string())
-    }
+    git::current_branch().map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

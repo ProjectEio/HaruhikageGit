@@ -3,38 +3,21 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 // --- Components & Types ---
-import { StatusInfo, GitFileStatus, CommitInfo, DeviceCode, ProxySettings, Notification, ManagedRepository, SyncStatus } from "./types";
+import { StatusInfo, DeviceCode, ProxySettings, Notification, ManagedRepository } from "./types";
 import { TopNavBar } from "./components/TopNavBar";
-import { WorkspacePanel } from "./components/WorkspacePanel";
-import { DiffAndActionsArea } from "./components/DiffAndActionsArea";
 import { AddProfileModal, GithubLoginModal, ProxyModal } from "./components/Modals";
+import { AccountManager } from "./components/AccountManager";
 
 function App() {
   const appWindow = getCurrentWindow();
 
   // --- States ---
   const [status, setStatus] = useState<StatusInfo | null>(null);
-  const [gitStatus, setGitStatus] = useState<GitFileStatus[]>([]);
-  const [branches, setBranches] = useState<string[]>([]);
   const [currentBranch, setCurrentBranch] = useState<string>("unknown");
-  const [commits, setCommits] = useState<CommitInfo[]>([]);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   
   // Multi-repository states
   const [repos, setRepos] = useState<ManagedRepository[]>([]);
   const [activeRepoPath, setActiveRepoPath] = useState<string | null>(null);
-
-  const handleSwitchBranch = async (branchName: string) => {
-    try {
-      await invoke("git_checkout", { target: branchName });
-      reloadData();
-    } catch (e) {
-      showNotif(`切换分支失败: ${e}`, "danger");
-    }
-  };
-
-  // File Preview state
-  const [selectedPreviewPath, setSelectedPreviewPath] = useState<string | null>(null);
 
   // Proxy States
   const [proxyAuto, setProxyAuto] = useState(true);
@@ -58,10 +41,6 @@ function App() {
   const [githubPat, setGithubPat] = useState("");
   const [githubDevice, setGithubDevice] = useState<DeviceCode | null>(null);
   const [githubPollingMsg, setGithubPollingMsg] = useState("等待用户在浏览器中完成授权...");
-
-  // Commit Form States
-  const [commitMsg, setCommitMsg] = useState("");
-  const [commitStageAll, setCommitStageAll] = useState(false);
 
   const githubPollingRef = useRef<number | null>(null);
 
@@ -110,37 +89,6 @@ function App() {
           }
         }
 
-        // Fetch Working Tree
-        const files: GitFileStatus[] = await invoke("get_git_status");
-        setGitStatus(prev => {
-          if (prev.length === files.length && JSON.stringify(prev) === JSON.stringify(files)) return prev;
-          return files;
-        });
-
-
-        // Fetch Branches
-        const rawBranches: string[] = await invoke("get_git_branches");
-        let active = "";
-        const cleanBranches = rawBranches.map((b) => {
-          if (b.startsWith("*")) {
-            active = b.replace("*", "").trim();
-            return active;
-          }
-          return b;
-        });
-        setBranches(prev => {
-          if (prev.length === cleanBranches.length && JSON.stringify(prev) === JSON.stringify(cleanBranches)) return prev;
-          return cleanBranches;
-        });
-        setCurrentBranch(active);
-
-        // Fetch Commits
-        const logs: CommitInfo[] = await invoke("get_git_commits", { limit: 100 });
-        setCommits(prev => {
-          if (prev.length === logs.length && prev[0]?.hash === logs[0]?.hash) return prev;
-          return logs;
-        });
-        
         // Fetch Current Branch
         try {
           const c: string = await invoke("get_current_branch");
@@ -148,22 +96,8 @@ function App() {
         } catch (e) {
           setCurrentBranch("unknown");
         }
-
-        try {
-          // Fetch Sync Status
-          const sync: SyncStatus = await invoke("get_sync_status");
-          setSyncStatus(prev => {
-            if (prev && prev.ahead === sync.ahead && prev.behind === sync.behind && prev.has_upstream === sync.has_upstream) return prev;
-            return sync;
-          });
-        } catch (e) {
-          console.error("Failed to get sync status", e);
-        }
       } else {
-        setGitStatus([]);
-        setBranches([]);
         setCurrentBranch("");
-        setCommits([]);
       }
     } catch (err) {
       console.error("加载数据失败:", err);
@@ -176,25 +110,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    // Auto-fetch sync status every 60 seconds
-    const interval = setInterval(async () => {
-      if (activeRepoPath) {
-        try {
-          // Perform a background fetch to update remote tracking branches
-          await invoke("git_fetch");
-          // Update sync status
-          const sync: SyncStatus = await invoke("get_sync_status");
-          setSyncStatus(sync);
-        } catch (e) {
-          console.error("Auto fetch failed:", e);
-        }
-      }
-    }, 60000);
-
-    return () => clearInterval(interval);
-  }, [activeRepoPath]);
-
-  useEffect(() => {
     reloadData();
     const interval = setInterval(() => {
       if (!activeModal) {
@@ -203,11 +118,6 @@ function App() {
     }, 4500);
     return () => clearInterval(interval);
   }, [activeModal, activeRepoPath]);
-
-  // Reset selected file preview when active repository changes
-  useEffect(() => {
-    setSelectedPreviewPath(null);
-  }, [activeRepoPath]);
 
   // --- GitHub OAuth Token Polling ---
   useEffect(() => {
@@ -305,20 +215,6 @@ function App() {
     }
   };
 
-  const handleUndoAll = async () => {
-    if (confirm("⚠️ 确定要放弃当前所有未提交的变动吗？此操作会执行 git reset --hard 并清空所有新增文件，且无法撤销！")) {
-      try {
-        showNotif("正在还原工作区代码...", "info");
-        await invoke("git_discard_changes");
-        showNotif("工作区代码已完全还原成功！", "success");
-        setSelectedPreviewPath(null); // Reset preview on discard
-        reloadData();
-      } catch (err) {
-        showNotif("还原工作区失败: " + err, "danger");
-      }
-    }
-  };
-
   const handleSwitchProfile = async (alias: string, global: boolean) => {
     try {
       await invoke("switch_profile", { alias, global });
@@ -329,7 +225,6 @@ function App() {
     }
   };
 
-  // @ts-ignore
   const handleDeleteProfile = async (alias: string) => {
     if (confirm(`确认要删除别名为 '${alias}' 的 Profile 吗？`)) {
       try {
@@ -417,106 +312,6 @@ function App() {
     }
   };
 
-  const handleCheckoutBranch = async (target: string) => {
-    try {
-      showNotif(`正在切换至分支: ${target}...`, "info");
-      const out: string = await invoke("git_checkout", { target });
-      showNotif(out || `已成功切换至分支 ${target}`, "success");
-      reloadData();
-    } catch (err) {
-      showNotif("切换分支失败: " + err, "danger");
-    }
-  };
-
-  const handleCreateBranch = async () => {
-    const name = prompt("请输入新分支的名称 (Branch Name):");
-    if (name) {
-      try {
-        const out: string = await invoke("git_create_branch", { name, startPoint: null });
-        showNotif(out || `分支 '${name}' 创建成功！`, "success");
-        reloadData();
-      } catch (err) {
-        showNotif("分支创建失败: " + err, "danger");
-      }
-    }
-  };
-
-
-
-  const handleStageFiles = async (paths: string[], stage: boolean) => {
-    if (paths.length === 0) return;
-    try {
-      if (!stage) {
-        await invoke("git_unstage_files", { specs: paths });
-      } else {
-        await invoke("git_stage_files", { specs: paths });
-      }
-      reloadData();
-    } catch (err) {
-      showNotif("操作变更失败: " + err, "danger");
-    }
-  };
-
-  const handleGitFetch = async () => {
-    try {
-      showNotif("正在拉取远程变更...", "info");
-      const out: string = await invoke("git_fetch");
-      showNotif(out || "Fetch 抓取远程成功", "success");
-      reloadData();
-    } catch (err) {
-      showNotif("Fetch 失败: " + err, "danger");
-    }
-  };
-
-  const handleGitPull = async () => {
-    try {
-      showNotif("正在拉取远程变更并合并...", "info");
-      await invoke("git_pull", { alias: null, global: false });
-      showNotif("Pull 合并成功，工作区已与远程对齐", "success");
-      reloadData();
-    } catch (err) {
-      showNotif("Pull 失败: " + err, "danger");
-    }
-  };
-
-  const handleGitPush = async () => {
-    try {
-      showNotif("正在推送本地提交至远程...", "info");
-      await invoke("git_push");
-      showNotif("Push 推送成功，远程已完全同步", "success");
-      reloadData();
-    } catch (err) {
-      showNotif("Push 失败: " + err, "danger");
-    }
-  };
-
-  const handleGitCommit = async () => {
-    if (!commitMsg.trim()) {
-      showNotif("提交信息 (Commit Message) 不能为空", "danger");
-      return;
-    }
-    try {
-      showNotif("正在执行本地提交...", "info");
-      await invoke("git_commit", {
-        message: commitMsg.trim(),
-        all: commitStageAll,
-        profile: null,
-      });
-      showNotif("Git Commit 提交成功！", "success");
-      setCommitMsg("");
-      setSelectedPreviewPath(null); // Reset preview on successful commit
-      reloadData();
-    } catch (err) {
-      showNotif("提交失败: " + err, "danger");
-    }
-  };
-
-  const handleCopyHash = (hash: string) => {
-    navigator.clipboard.writeText(hash);
-    showNotif("提交 Hash 已复制到剪贴板", "success");
-  };
-
-
   const handleClose = async () => {
     try {
       await appWindow.close();
@@ -569,103 +364,17 @@ function App() {
           onSelectRepo={handleSwitchRepo}
           onAddRepo={handleAddRepo}
           currentBranch={currentBranch}
-          branches={branches}
-          onSwitchBranch={handleSwitchBranch}
           onRemoveRepo={handleRemoveRepo}
-          syncStatus={syncStatus}
         />
 
-      {/* Main Workspace Layout (Two-Column with lines) */}
-      <div className="main-layout" style={{ flex: 1, overflow: "hidden", display: "flex", gap: "0", padding: "0" }}>
-        {/* Left Side: WorkspacePanel */}
-        <aside className="sidebar-left" style={{ width: "340px", display: "flex", flexDirection: "column", flexShrink: 0, position: "relative", height: "100%", borderRight: "1px solid var(--border-color)", background: "#ffffff", padding: "0" }}>
-          <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-            <WorkspacePanel
-              status={status}
-              gitStatus={gitStatus}
-              currentBranch={currentBranch}
-              commitMsg={commitMsg}
-              setCommitMsg={setCommitMsg}
-              commitStageAll={commitStageAll}
-              setCommitStageAll={setCommitStageAll}
-              onStageFiles={handleStageFiles}
-              onGitCommit={handleGitCommit}
-              commits={commits}
-              onCopyHash={handleCopyHash}
-              onUndoAll={handleUndoAll}
-              onSelectFileForPreview={(path) => setSelectedPreviewPath(path)}
-              onSwitchProfile={handleSwitchProfile}
-            />
-          </div>
-        </aside>
-
-        {/* Center: Diff Preview and Quick Actions */}
-        <main className="workspace-center" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", height: "100%", background: "#f8fafc" }}>
-          <DiffAndActionsArea
-            filePath={selectedPreviewPath}
-            activePath={activeRepoPath}
-            onClosePreview={() => setSelectedPreviewPath(null)}
-            showNotif={showNotif}
-          />
-        </main>
-      </div>
-
-      {/* Bottom Bar: Branch Switcher & neon Sync buttons (With Suitable Colors) */}
-      {status?.is_repo && (
-        <footer className="app-footer" style={{
-          height: "56px",
-          minHeight: "56px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 20px",
-          background: "#fdf2f8", // Sakura soft pink background
-          borderTop: "1px solid rgba(236, 72, 153, 0.15)",
-          zIndex: 5
-        }}>
-          {/* Branch Switcher Select */}
-          <div className="bottom-branch-block" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)", fontWeight: "600" }}>活动分支:</span>
-            <select
-              id="active-branch-sel"
-              value={currentBranch}
-              onChange={(e) => e.target.value && handleCheckoutBranch(e.target.value)}
-              style={{
-                padding: "6px 12px",
-                background: "#ffffff",
-                borderRadius: "6px",
-                border: "1px solid rgba(236, 72, 153, 0.2)",
-                color: "var(--text-primary)",
-                fontSize: "0.8rem",
-                fontWeight: "600",
-                cursor: "pointer"
-              }}
-            >
-              {branches.map((b) => (
-                <option value={b} key={b}>
-                  ● {b}
-                </option>
-              ))}
-            </select>
-            <button className="btn btn-sm btn-secondary" onClick={handleCreateBranch} style={{ fontSize: "0.75rem", border: "1px solid rgba(236, 72, 153, 0.2)" }}>
-              + 新建分支
-            </button>
-          </div>
-
-          {/* Sync neon Actions */}
-          <div className="bottom-sync-block" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <button className="btn btn-sm btn-secondary" onClick={handleGitFetch} style={{ border: "1px solid rgba(236, 72, 153, 0.2)" }}>
-              Fetch 抓取
-            </button>
-            <button className="btn btn-sm btn-secondary" onClick={handleGitPull} style={{ border: "1px solid rgba(236, 72, 153, 0.2)" }}>
-              Pull 拉取
-            </button>
-            <button className="btn btn-sm btn-primary" onClick={handleGitPush}>
-              Push 推送至 Origin
-            </button>
-          </div>
-        </footer>
-      )}
+      <AccountManager
+        status={status}
+        onAddProfile={() => setActiveModal("add")}
+        onGithubLogin={() => setActiveModal("github")}
+        onSwitchProfile={handleSwitchProfile}
+        onDeleteProfile={handleDeleteProfile}
+        onOpenProxy={handleOpenProxy}
+      />
 
       {/* MODALS */}
       <AddProfileModal
