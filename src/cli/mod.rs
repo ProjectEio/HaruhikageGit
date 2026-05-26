@@ -6,9 +6,7 @@ use crate::core::{github::DeviceCode, ops};
 
 use anyhow::Context;
 
-// ── clap 结构定义 ────────────────────────────────────────────────────────────
 
-/// HaruhikageGit (hg) — 快速切换 git 账户与提交信息
 #[derive(Parser)]
 #[command(
     name = "hg",
@@ -17,6 +15,7 @@ use anyhow::Context;
     long_about = None,
     allow_external_subcommands = true
 )]
+
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -53,28 +52,17 @@ enum Commands {
         #[arg(long)]
         no_path: bool,
     },
-
-    /// 代理配置
     #[command(subcommand)]
     Proxy(ProxyCommands),
-
-    /// 推送当前分支到 origin
     Publish,
-
-    /// 快速 git commit
     Commit {
-        /// 提交信息
         #[arg(short, long)]
         message: String,
-        /// 自动 stage 所有已跟踪文件的变更（git commit -a）
         #[arg(short, long)]
         all: bool,
-        /// 提交前先切换到指定 Profile（仅 local）
         #[arg(short = 'p', long = "profile")]
         profile: Option<String>,
     },
-
-    /// 透传执行任意原生 Git 命令
     #[command(external_subcommand)]
     External(Vec<String>),
 }
@@ -158,12 +146,6 @@ enum GithubCommands {
         #[arg(short, long)]
         global: bool,
     },
-    /// 配置 GitHub OAuth App 的 client_id（首次使用前需运行一次）
-    SetClient {
-        /// GitHub OAuth App 的 client_id（必须是 OAuth App，不能是 GitHub App）
-        client_id: String,
-    },
-    /// 直接使用 Personal Access Token（PAT）登录
     Pat {
         /// GitHub PAT（https://github.com/settings/tokens/new?scopes=repo）
         token: String,
@@ -223,7 +205,6 @@ pub fn run() -> Result<()> {
         Some(Commands::Publish) => cmd_publish()?,
         Some(Commands::Github(sub)) => match sub {
             GithubCommands::Login { alias, global } => cmd_github_login(&alias, global)?,
-            GithubCommands::SetClient { client_id } => cmd_github_set_client(&client_id)?,
             GithubCommands::Pat { token, alias } => cmd_github_pat(&token, &alias)?,
             GithubCommands::Create { name, org, private, desc, profile } => {
                 cmd_github_create(&name, org.as_deref(), private, &desc, &profile)?
@@ -407,8 +388,6 @@ fn cmd_profile_list() -> Result<()> {
     Ok(())
 }
 
-// ── GitHub 命令处理 ───────────────────────────────────────────────────────────
-
 fn cmd_github_login(alias: &str, global: bool) -> Result<()> {
     println!("{} 正在向 GitHub 请求授权码...", "→".blue());
     let device: DeviceCode = ops::github_request_code()?;
@@ -443,15 +422,6 @@ fn cmd_github_login(alias: &str, global: bool) -> Result<()> {
     }
     Ok(())
 }
-
-fn cmd_github_set_client(client_id: &str) -> Result<()> {
-    ops::set_github_client(client_id)?;
-    println!("{} GitHub OAuth client_id 已保存", "✔".green());
-    println!("  现在可以运行: {}", "hg github login".cyan());
-    Ok(())
-}
-
-// ── Install ───────────────────────────────────────────────────────────────────
 
 fn cmd_install(dir: Option<std::path::PathBuf>, add_to_path: bool) -> Result<()> {
     let r = ops::install(dir, add_to_path)?;

@@ -9,13 +9,11 @@ use crate::core::{
 
 use serde::Serialize;
 
-/// 根据配置构建 GitHub 客户端
 fn gh_client() -> Result<github::Client> {
     let cfg = Config::load()?;
     Ok(github::Client::new(&cfg.proxy))
 }
 
-/// `hg status` 返回的完整状态快照
 #[derive(Serialize)]
 pub struct StatusInfo {
     pub global_name: Option<String>,
@@ -83,7 +81,6 @@ pub fn list_profiles() -> Result<Vec<(String, Profile)>> {
     Ok(profiles)
 }
 
-/// 将指定 profile 应用到 git config，返回所应用的 Profile
 pub fn switch_profile(alias: &str, global: bool) -> Result<Profile> {
     if !global && !git::is_git_repo() {
         bail!("当前目录不是 git 仓库，请使用 --global 切换全局账户");
@@ -109,7 +106,6 @@ pub fn switch_profile(alias: &str, global: bool) -> Result<Profile> {
     Ok(profile)
 }
 
-/// 从当前 git 身份（local 或 global）导入为一个新 Profile
 pub fn import_profile(alias: &str, global: bool) -> Result<Profile> {
     let (name, email) = git::current_identity(global);
     let name = name.ok_or_else(|| {
@@ -134,8 +130,6 @@ pub fn import_profile(alias: &str, global: bool) -> Result<Profile> {
     cfg.save()?;
     Ok(profile)
 }
-
-// ── GitHub OAuth ──────────────────────────────────────────────────────────────
 
 pub fn set_github_client(client_id: &str) -> Result<()> {
     let mut cfg = Config::load()?;
